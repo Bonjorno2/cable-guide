@@ -27,21 +27,19 @@ NUM = 52
 NAME = "LAUGH TRACK"
 TAG = "Half-hour comedy, 1950-1964"
 
-# 11.6 to 29 minutes. The ceiling is the load-bearing number and it is 1740,
-# not 1800, because packChannel() adds a 60s break to every programme before
-# choosing a slot: at 1741s an episode needs 1801s, overflows the half-hour,
-# and is given a *whole hour* — 29 minutes of Jack Benny and 31 minutes of
-# commercials. 27 episodes landed in that 1741-1800 window on the first build
-# and dragged the channel to 28% ads, the worst on the dial.
+# 11.6 to 29.5 minutes. The ceiling is SLOT - MINBREAK: an episode longer than
+# this needs the next half-hour up and is handed a whole one, which is how the
+# channel first came out at 28% ads. It was 1740 while packChannel() insisted
+# on a 60s break; that floor is now 30s, so 30 seconds of ceiling come back and
+# with them the uncut half-hours — most of the Burns and Allen shelf, which is
+# recorded off-air with its own commercials still in it.
 #
-# They are there because a recording made off-air already contains the ads, so
-# it measures a full half-hour rather than the ~22 minutes of programme. The
-# uncut ones cost a slot and a half each; cutting the band is the fix, and the
-# per-series caps simply backfill from the next candidate down.
+# Keep in step with MINBREAK in template.html. Too high and the channel pays a
+# full extra slot per episode; too low and the uncut recordings all drop out.
 #
 # The floor drops truncated fragments. Both ends together also throw out the
 # "Complete TV Series" single-file dumps.
-BAND = (700, 1740)
+BAND = (700, 1770)
 
 # (search phrase, cap). The phrase is matched against the *title* by
 # archive.org, then re-checked here against `must` — the search tokenises, so

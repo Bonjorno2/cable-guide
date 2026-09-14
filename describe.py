@@ -133,13 +133,19 @@ def excerpt_map():
 def repolish(data):
     """Re-run the cleaning rules over descriptions already stored, no network.
     The stored text is already plain, so clean() is safe to reapply."""
-    kept = dropped = changed = 0
+    kept = dropped = echoed = changed = 0
     for c in data["channels"]:
         for it in c["items"]:
             d = it.get("desc")
             if not d:
                 continue
             new = shorten(clean(d))
+            # Descriptions stored before echoes_title() existed. The guide
+            # prints title and description into the same tooltip, so one that
+            # restates the other is a line that reads as a stutter.
+            if new and echoes_title(it["title"], new):
+                it.pop("desc", None); it.pop("desc_src", None); echoed += 1
+                continue
             if not new:
                 it.pop("desc", None); it.pop("desc_src", None); dropped += 1
             else:
@@ -147,8 +153,8 @@ def repolish(data):
                     changed += 1
                 it["desc"] = new
                 kept += 1
-    print(f"repolish: {kept} kept ({changed} rewritten), {dropped} dropped",
-          file=sys.stderr)
+    print(f"repolish: {kept} kept ({changed} rewritten), {dropped} dropped, "
+          f"{echoed} dropped as title echoes", file=sys.stderr)
 
 
 def echoes_title(title, desc):

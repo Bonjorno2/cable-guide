@@ -16,6 +16,7 @@ with open("index.html", "w", encoding="utf-8") as f:
 
 SLOT = 1800
 CONTENT = 0.86
+MINBREAK = 30          # keep in step with the template; see packChannel there
 
 
 def pack(items):
@@ -23,10 +24,10 @@ def pack(items):
     cap = SLOT * CONTENT
 
     def mk(lst, d):
-        return (lst, d, max(SLOT, -(-(d + 60) // SLOT) * SLOT))
+        return (lst, d, max(SLOT, -(-(d + MINBREAK) // SLOT) * SLOT))
 
-    long = [mk([it], it["dur"]) for it in items if it["dur"] + 60 > SLOT]
-    pool = sorted((it for it in items if it["dur"] + 60 <= SLOT),
+    long = [mk([it], it["dur"]) for it in items if it["dur"] + MINBREAK > SLOT]
+    pool = sorted((it for it in items if it["dur"] + MINBREAK <= SLOT),
                   key=lambda it: -it["dur"])
 
     short = []

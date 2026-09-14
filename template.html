@@ -407,6 +407,11 @@ const SLOT  = 1800;                          // 30 minutes
 const EPOCH = Date.UTC(2025,0,1,0,0,0)/1000; // all schedules count from here
 const IDENT = 7;                             // station ident at the top of a block
 const SPOTS = DATA.interstitials;
+// Shortest gap worth calling a break. This is the only thing standing between
+// a programme and the next slot up, so it is deliberately small: at 60 a
+// 29-minute episode needed 30:01 and was given a full hour, which cost CH 06
+// a quarter of its loop. See packChannel.
+const MINBREAK = 30;
 
 function fnv(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rng(seed){let a=seed>>>0;return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -423,13 +428,20 @@ const CONTENT = 0.86;
    Filling blocks in playlist order wastes a lot of slot (a 17-minute film
    followed by a 15-minute one leaves each stranded in its own half hour, so
    the channel ends up 40%+ commercials). Packing longest-first and taking
-   whatever still fits gets the content share close to the target instead.  */
+   whatever still fits gets the content share close to the target instead.
+
+   MINBREAK, not 60, decides when a programme needs the next slot up. The gap
+   between those two numbers is only 30 seconds but it is worth 68 hours of
+   dead air across the dial: a recording made off-air already contains its own
+   commercials, so it measures a full half-hour rather than the ~22 minutes of
+   programme, and at 60 every one of those was handed a whole hour and half an
+   hour of ads. CH 06 CHRONICLES had 51 of its 200 episodes in that state.   */
 function packChannel(ch){
   const cap  = SLOT * CONTENT;
   const mk   = (list, d) => ({items:list, content:d,
-                              slot: Math.max(SLOT, Math.ceil((d+60)/SLOT)*SLOT)});
-  const long = ch.items.filter(it => it.dur + 60 >  SLOT).map(it => mk([it], it.dur));
-  const pool = ch.items.filter(it => it.dur + 60 <= SLOT)
+                              slot: Math.max(SLOT, Math.ceil((d+MINBREAK)/SLOT)*SLOT)});
+  const long = ch.items.filter(it => it.dur + MINBREAK >  SLOT).map(it => mk([it], it.dur));
+  const pool = ch.items.filter(it => it.dur + MINBREAK <= SLOT)
                        .slice().sort((a,b) => b.dur - a.dur);
 
   const short = [];

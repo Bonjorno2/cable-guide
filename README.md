@@ -1,6 +1,6 @@
 # THE GUIDE
 
-A cable television guide that is always already in progress. Eight channels
+A cable television guide that is always already in progress. 47 channels
 built from curated Internet Archive collections, running on a real schedule.
 Tune in at 8:17 and you are seventeen minutes into the movie.
 
@@ -31,7 +31,16 @@ Packing in playlist order wastes a lot of slot (a 17-minute film followed by a
 commercials), so blocks are filled longest-first, taking whatever still fits,
 then dealt back out in a seeded order so the channel is not front-loaded.
 `CONTENT = 0.86` is the target content share per slot; it lands the lineup at
-~23% commercials on average, which is roughly period-accurate.
+~16% commercials on average, which is roughly period-accurate.
+
+`MINBREAK = 30` decides when a programme is too long to share and needs the
+next slot up. It is the highest-leverage constant in the file. At 60 it cost
+**68 hours of dead air across 12 channels**: a recording made off-air already
+contains its own commercials, so it measures a full half-hour rather than the
+~22 minutes of programme, and every one of those needed 30:01 and was handed a
+whole hour. CH 06 CHRONICLES had 51 of its 200 episodes in that state and ran
+at 26% commercials; it is now 11%. Anything above ~25% in the build table is
+worth checking against this number before blaming the lineup.
 
 The point of slotting at all: **the guide grid aligns to :00 and :30**, like a
 real listing. Without it the grid is a mess of ragged slivers and the
@@ -115,17 +124,18 @@ Two details that turned out to matter more than the series list:
 - **Caps are per series.** Jack Benny alone has 200 free episodes; uncapped,
   the channel is the Jack Benny channel with guests. The lineup is then dealt
   round-robin, so leaving it on doesn't get you fourteen consecutive Bennys.
-- **The duration ceiling is 1740s, not 1800s.** `packChannel()` adds a 60s
-  break before choosing a slot, so a 1741s episode needs 1801s, overflows the
-  half-hour and is given a *whole hour* — 29 minutes of programme, 31 minutes
-  of commercials. 27 episodes landed in that window on the first build and
-  took the channel to 28% ads, the worst on the dial; the ceiling brought it
-  to 16%. They are there because a recording made off-air still contains its
-  original ads, so it measures a full half-hour rather than ~22 minutes.
+- **The duration ceiling is `SLOT - MINBREAK`, currently 1770s.** An episode
+  longer than that needs the next half-hour up and is handed a whole one — 29
+  minutes of programme, 31 minutes of commercials. This channel is where that
+  bug was found: 27 episodes landed past the old ceiling and took it to 28%
+  ads, the worst on the dial. It read as a lineup problem and was first fixed
+  by cutting the band, which cost most of the Burns and Allen shelf. It was
+  actually a scheduler problem, and lowering `MINBREAK` to 30 fixed it for the
+  whole dial and gave those episodes back. Keep the two numbers in step.
 
 ### Descriptions
 
-**3,369 of 3,576 programmes (94%) carry a listing description**, from two
+**3,137 of 3,695 programmes (84%) carry a listing description**, from two
 sources, best first:
 
 1. **Glenn Erickson's own prose**, for the 324 films ia-curation matched to a
@@ -148,7 +158,14 @@ most of that file, and each rule came from reading what actually came back:
 
 Filtering happens per *sentence*, not per description, so a good synopsis that
 merely ends with a link keeps the synopsis. Anything left under 25 characters
-is dropped rather than shown as a stub — hence 94% rather than 100%.
+is dropped rather than shown as a stub.
+
+One more rule accounts for most of the missing 16%: a description that only
+restates the title is dropped. 356 items had one — CH 53 alone had 81, CH 19
+had 52 — and since the guide prints title and description into the same
+tooltip, keeping them bought a second line that read as a stutter. Coverage
+fell from 94% to 84% when they went, which is the honest number: those 356
+were never carrying information.
 
 `--repolish` re-runs the cleaning rules over descriptions already stored, with
 no network, which is how to iterate on those rules without a four-minute
@@ -232,7 +249,7 @@ static host, or open it directly.
 
 ## Channels
 
-**47 channels, 3,687 programmes.** Most channels run for days before they
+**47 channels, 3,695 programmes.** Most channels run for days before they
 repeat; DOUBLE and SAVANT run for over a week.
 
 Channels marked ● are curator shelves from ia-curation — a real point of view,
@@ -286,7 +303,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 49 | THE SHADOW ● | Detectives, murder, Lamont Cranston | 12 | 17h |
 | 50 | POLIZIESCO ● | Italian crime and thrillers | 9 | 16h |
 | 51 | SHORT SUBJECTS ● | Stooges, Our Gang, Little Rascals | 38 | 32h |
-| 52 | LAUGH TRACK † | Half-hour comedy, 1950–1964 | 111 | 55h |
+| 52 | LAUGH TRACK † | Half-hour comedy, 1950–1964 | 119 | 59h |
 | 53 | LLOYD & CO ● | Lloyd, Chaplin, Snub Pollard, 1900–1923 | 110 | 28h |
 
 Gaps in the numbering are deliberate — a dial with holes in it is what a real
@@ -480,4 +497,3 @@ method exists at all.
 
 - Station idents and a sign-off card between programmes
 - Dayparting — cartoons in the morning, creature features after midnight
-- A shareable `?ch=04` deep link, since the schedule is global anyway
