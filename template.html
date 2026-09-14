@@ -192,6 +192,7 @@
     border:1px solid rgba(255,255,255,.28);cursor:pointer;text-transform:uppercase;
   }
   .ctrls button:hover{background:var(--gold);color:#140a3a;border-color:var(--gold)}
+  .ctrls button.on{background:var(--gold);color:#140a3a;border-color:var(--gold)}
   .vol{width:72px;accent-color:var(--gold);cursor:pointer;align-self:center}
 
   /* ---------- BOTTOM HALF : the grid ---------- */
@@ -265,6 +266,9 @@
   @media (hover:none){
     .ctrls{gap:8px}
     .ctrls button{font-size:13px;letter-spacing:.1em;padding:0 15px;min-height:44px}
+    /* 44px targets are wide, and a third row of them pushes the picture out of
+       .top altogether. FULL is already a 48px button on the picture itself. */
+    #bFull{display:none}
     .vol{width:100px;height:38px}
     .exitcine{font-size:13px;padding:13px 18px;top:12px;right:12px}
   }
@@ -341,7 +345,8 @@
           <button id="bMute">MUTE</button>
           <input class="vol" id="vol" type="range" min="0" max="100" value="85" title="Volume">
           <button id="bFull" title="Full screen (F, or double-click the picture)">⛶ FULL</button>
-          <button id="bScroll">SCROLL: ON</button>
+          <button id="bSuggest" title="Only films a curator shelf and a critic both vouched for">★ SUGGESTED</button>
+          <button id="bScroll" class="on" title="Pause the channel crawl">SCROLL</button>
           <button id="bArchive">ARCHIVE ↗</button>
         </div>
       </div>
@@ -356,7 +361,7 @@
     <div class="rowsclip" id="rowsClip">
       <div class="rowsmove" id="rowsMove"></div>
       <div class="nowline" id="nowLine" hidden></div>
-      <div class="hint"><span class="hk">↑↓ channel · ←→ guide · type a number · F = full screen · space = pause scroll</span><span class="ht">drag the guide · tap a row to tune</span></div>
+      <div class="hint"><span class="hk">↑↓ channel · ←→ guide · type a number · G = suggested · F = full screen · space = pause scroll</span><span class="ht">drag the guide · tap a row to tune</span></div>
     </div>
   </div>
 
@@ -430,12 +435,21 @@ function packChannel(ch){
   return all;
 }
 
-const CH = DATA.channels.map(c=>{
-  const blocks = packChannel(c);
-  const cum=[]; let t=0;
-  for(const b of blocks){ cum.push(t); t+=b.slot }
-  return {...c, blocks, cum, cycle:t};
-});
+function buildLineup(list){
+  return list.map(c=>{
+    const blocks = packChannel(c);
+    const cum=[]; let t=0;
+    for(const b of blocks){ cum.push(t); t+=b.slot }
+    return {...c, blocks, cum, cycle:t};
+  });
+}
+// Two lineups, both scheduled off the same EPOCH, so each is a pure function
+// of wall-clock time exactly as before -- switching guides does not restart
+// anything, it just looks at a different set of channels.
+const MAIN = buildLineup(DATA.channels);
+const PICKS = (DATA.suggested && DATA.suggested.length)
+                ? buildLineup(DATA.suggested) : null;
+let CH = MAIN;
 
 function programAt(ch, t){
   const cyc = ch.cycle;
@@ -828,7 +842,7 @@ function tune(i, viaClick){
   resetPre();                  // whatever was warming belongs to the old channel
   burst(); clunk();
   $('ident').hidden=true; $('lower').hidden=true;
-  try{ history.replaceState(null,'','?ch='+pad(CH[chIdx].num)) }catch(e){}
+  writeURL();
   markLive();
   if(viaClick && !powered) powerOn();
   refresh(true);
@@ -1123,7 +1137,40 @@ $('vol').addEventListener('input',e=>{
   video.volume=+e.target.value/100;
   if(video.volume>0 && video.muted){ video.muted=false; syncMute() }
 });
-$('bScroll').addEventListener('click',e=>{e.stopPropagation();scrollOn=!scrollOn;$('bScroll').textContent='SCROLL: '+(scrollOn?'ON':'OFF')});
+function syncScrollBtn(){ $('bScroll').classList.toggle('on', scrollOn) }
+$('bScroll').addEventListener('click',e=>{e.stopPropagation();scrollOn=!scrollOn;syncScrollBtn()});
+
+/* ---------- the suggested guide ----------
+   CH 15 DOUBLE holds the films that sit on a coherent curator shelf *and*
+   carry a DVD Savant grade. suggest.py splits those back out into five themed
+   channels; this swaps the dial over to them. Same EPOCH, so both lineups stay
+   pure functions of wall-clock time -- nothing restarts, you are just looking
+   at a smaller, entirely vouched-for service. */
+let picks = false;
+function writeURL(){
+  try{
+    history.replaceState(null,'',(picks?'?guide=picks&':'?')+'ch='+pad(CH[chIdx].num));
+  }catch(e){}
+}
+function setGuide(on){
+  if((on && !PICKS) || on===picks) return;
+  picks = on;
+  CH = on ? PICKS : MAIN;
+  chIdx = 0;
+  panX = 0; scrollY = 0; flingX = 0; flingY = 0;
+  curKey = null; resetPre();            // the old channel's tape is not ours
+  syncGuideBtn();
+  buildGrid();
+  refresh(true);
+  writeURL();
+}
+function syncGuideBtn(){
+  const b=$('bSuggest');
+  b.textContent = picks ? '★ ALL CHANNELS' : '★ SUGGESTED';
+  b.classList.toggle('on', picks);
+}
+if(!PICKS) $('bSuggest').hidden = true;
+$('bSuggest').addEventListener('click',e=>{ e.stopPropagation(); setGuide(!picks) });
 $('bArchive').addEventListener('click',e=>{
   e.stopPropagation();
   const st=tuneAt(CH[chIdx],now());          // link what is on, not the block
@@ -1204,8 +1251,9 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='ArrowDown'){ e.preventDefault(); tune(chIdx+1,true) }
   else if(e.key==='ArrowRight'){ e.preventDefault(); panX=Math.min(WINDOW_SECONDS-SLOT,panX+SLOT) }
   else if(e.key==='ArrowLeft') { e.preventDefault(); panX=Math.max(0,panX-SLOT) }
-  else if(e.key===' ')    { e.preventDefault(); scrollOn=!scrollOn; $('bScroll').textContent='SCROLL: '+(scrollOn?'ON':'OFF') }
+  else if(e.key===' ')    { e.preventDefault(); scrollOn=!scrollOn; syncScrollBtn() }
   else if(e.key==='m')    { video.muted=!video.muted; syncMute() }
+  else if(e.key==='g')    { e.preventDefault(); setGuide(!picks) }
   else if(e.key==='f')    { e.preventDefault(); if(powered) toggleFull() }
   // real fullscreen handles its own Escape; cinema mode has to do it here
   else if(e.key==='Escape' && cinema){ e.preventDefault(); setCinema(false) }
@@ -1231,6 +1279,9 @@ addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(buildGrid,220) }
    ══════════════════════════════════════════════════════════════════ */
 // ?ch=04 tunes straight to a channel; the schedule is global, so a link like
 // that lands someone on exactly what you were watching.
+// ?guide=picks opens straight into the suggested lineup, and survives tuning
+if(PICKS && /[?&]guide=picks\b/.test(location.search)){ picks=true; CH=PICKS }
+syncGuideBtn();
 const askedFor = parseInt((location.search.match(/[?&]ch=(\d+)/)||[])[1], 10);
 const asked    = CH.findIndex(c=>c.num===askedFor);
 chIdx = asked>=0 ? asked
