@@ -74,7 +74,8 @@ the same for everyone. Tune in mid-break and you get a 1956 Chevrolet ad and a
 
 ## Where the programmes come from
 
-Two harvesters, because popularity and curation are different things.
+Three harvesters, because popularity, curation and copyright status are
+different things.
 
 `harvest.py` asks archive.org for a collection sorted by downloads. That is
 fine for newsreels and cartoons, where any given reel is interchangeable.
@@ -97,6 +98,30 @@ the curating:
 Grades and directors ride along into the UI: the now-playing panel shows
 `EXCELLENT · dir. Carol Reed`, and Excellent-graded programmes carry a ★ in
 the guide.
+
+`sitcom.py` builds one channel — CH 52 LAUGH TRACK — and exists because
+neither of the other two can. There is no collection whose boundary is
+"sitcoms that are actually free", and the obvious query is a trap: searching
+`subject:(sitcom)` inside `classic_tv` returns Leave It to Beaver, Are You
+Being Served and NewsRadio on the first page, all three still in copyright and
+uploaded by someone who didn't care. So the boundary is a hand-written list of
+15 series that lapsed into the public domain the same way — a 1950s producer
+who owned his negative and didn't file the renewal 28 years later. That is
+also why the list is heavy on syndicated filmed comedy and contains none of
+the network shows people remember better: CBS renewed, Desilu renewed.
+
+Two details that turned out to matter more than the series list:
+
+- **Caps are per series.** Jack Benny alone has 200 free episodes; uncapped,
+  the channel is the Jack Benny channel with guests. The lineup is then dealt
+  round-robin, so leaving it on doesn't get you fourteen consecutive Bennys.
+- **The duration ceiling is 1740s, not 1800s.** `packChannel()` adds a 60s
+  break before choosing a slot, so a 1741s episode needs 1801s, overflows the
+  half-hour and is given a *whole hour* — 29 minutes of programme, 31 minutes
+  of commercials. 27 episodes landed in that window on the first build and
+  took the channel to 28% ads, the worst on the dial; the ceiling brought it
+  to 16%. They are there because a recording made off-air still contains its
+  original ads, so it measures a full half-hour rather than ~22 minutes.
 
 ### Descriptions
 
@@ -149,6 +174,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `curated.py` | Builds channels from the ia-curation lists; durations via `_files.xml` on the data nodes |
 | `describe.py` | Adds a listing description to every programme (`--dry`, `--force`, `--repolish`) |
 | `harvest.py` | Queries the Archive.org search + metadata APIs, picks a browser-playable MP4 derivative per item, reads exact per-file durations, writes `channels.json` |
+| `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
 | `build.py` | Inlines `channels.json` into the template → `index.html` |
@@ -157,12 +183,16 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 ```bash
 python harvest.py        # collection-based channels (~45 min, API-throttled)
 python curated.py        # curator/critic channels from ia-curation (~5 min)
+python sitcom.py         # CH 52 only, merged in place (~1 min)
 python build.py          # regenerate index.html
 ```
 
 `curated.py` keeps the non-feature channels `harvest.py` produced (its `KEEP`
 set) and replaces the rest, so the usual refresh is just `curated.py` then
-`build.py`.
+`build.py`. `sitcom.py` only ever touches CH 52 — it drops that channel,
+rebuilds it and merges — so it is safe to re-run alone, in any order. CH 52 is
+in `curated.py`'s `KEEP` set so a refresh doesn't delete a channel it has no
+way to rebuild.
 
 ### Why the harvest is slow, and how it is kept from being slower
 
@@ -195,11 +225,12 @@ static host, or open it directly.
 
 ## Channels
 
-**46 channels, 3,576 programmes.** Most channels run for days before they
+**47 channels, 3,687 programmes.** Most channels run for days before they
 repeat; DOUBLE and SAVANT run for over a week.
 
 Channels marked ● are curator shelves from ia-curation — a real point of view,
-not a query.
+not a query. CH 52 is marked †: a hand-written list of public-domain series,
+because no query can tell a free sitcom from a bootlegged one.
 
 | CH | Name | What it is | Items | Loops |
 |---|---|---|---|---|
@@ -248,6 +279,7 @@ not a query.
 | 49 | THE SHADOW ● | Detectives, murder, Lamont Cranston | 12 | 17h |
 | 50 | POLIZIESCO ● | Italian crime and thrillers | 9 | 16h |
 | 51 | SHORT SUBJECTS ● | Stooges, Our Gang, Little Rascals | 38 | 32h |
+| 52 | LAUGH TRACK † | Half-hour comedy, 1950–1964 | 111 | 55h |
 | 53 | LLOYD & CO ● | Lloyd, Chaplin, Snub Pollard, 1900–1923 | 110 | 28h |
 
 Gaps in the numbering are deliberate — a dial with holes in it is what a real

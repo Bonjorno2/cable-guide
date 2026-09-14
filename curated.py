@@ -247,7 +247,10 @@ def main():
     # keep the existing non-feature channels; the curation is all features
     with open("channels.json", encoding="utf-8") as f:
         existing = json.load(f)
-    KEEP = {2, 3, 6, 7, 8, 9, 13, 14}
+    # 52 is sitcom.py's, and it is kept for the same reason as the rest: the
+    # curation is all features, so nothing here would rebuild it. Leaving it
+    # out means a routine `curated.py` refresh silently deletes the channel.
+    KEEP = {2, 3, 6, 7, 8, 9, 13, 14, 52}
     out = {"interstitials": existing["interstitials"],
            "channels": [c for c in existing["channels"] if c["num"] in KEEP]}
 
