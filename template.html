@@ -176,6 +176,14 @@
   .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ff9b3d);width:0}
   .joined{font-size:10.5px;color:#ffb3b3;letter-spacing:.11em;margin-top:5px;text-transform:uppercase;min-height:13px}
 
+  /* CH 16's listing is a night, not a film: one item is a whole drive-in
+     programme and its title only names the theme. The films are the thing a
+     viewer is choosing between, so they get their own line under it. */
+  .bill{font-size:11px;line-height:1.5;color:#e4e1ff;margin-top:7px}
+  .bill em{font-style:normal;color:var(--gold);letter-spacing:.15em;
+    font-size:8.5px;text-transform:uppercase;margin-right:7px}
+  .bill i{font-style:normal;color:var(--dim);margin:0 5px}
+
   /* The blurb takes the slack between "now" and "next", but it yields:
      min-height:0 lets it be clipped rather than pushing the controls out. */
   .nowblock{min-height:0;overflow:hidden;flex:0 1 auto}
@@ -280,7 +288,10 @@
     .top{flex-basis:42%;flex-direction:column}
     .side{flex:0 0 auto;flex-direction:row;flex-wrap:wrap;gap:8px 14px;padding:9px 12px;align-items:center}
     /* hide the "Next" preview text, but NOT .ctrls, which lives inside it */
-    .side .bar,.side .joined,.side .desc{display:none}
+    /* .bill goes with .desc: the strip is one line high here, and half a film
+       title cut at the panel edge is worse than sending them to the grid,
+       whose tooltip carries the same list. */
+    .side .bar,.side .joined,.side .desc,.side .bill{display:none}
     .side .next .lbl,.side .next .nexttitle{display:none}
     /* .next is a flex item, so min-width:auto stops it shrinking below its
        content -- .ctrls then measured 649px in a 375px viewport and the last
@@ -351,6 +362,7 @@
         <div class="nowtitle" id="nowTitle">—</div>
         <div class="nowmeta" id="nowMeta"></div>
         <div class="cred" id="cred" hidden></div>
+        <div class="bill" id="bill" hidden></div>
         <div class="bar"><i id="bar"></i></div>
         <div class="joined" id="joined"></div>
         <div class="desc" id="desc" hidden></div>
@@ -822,6 +834,7 @@ function buildGrid(){
                               (vouch(it)?'  '+vouch(it):'')+
                               (it.dir?'  dir. '+it.dir:'')+
                               '  —  '+mins(it.dur)+
+                              (it.feat?'\n    '+it.feat.join('  ·  '):'')+
                               (it.desc?'\n    '+it.desc:'')).join('\n\n');
         inner.appendChild(el);
         cur=p.end;
@@ -974,6 +987,15 @@ function refresh(force){
                    (why?'<span>'+esc(why)+'</span>':'');
     cred.hidden=false;
   } else cred.hidden=true;
+
+  // What is actually on tonight. Only CH 16 carries a bill: its items are
+  // whole evenings whose titles name the theme and not the pictures.
+  const bl=$('bill');
+  if(cur.feat && cur.feat.length){
+    bl.innerHTML='<em>Tonight</em>'+
+      cur.feat.map(esc).join('<i>·</i>');
+    bl.hidden=false;
+  } else bl.hidden=true;
 
   const de=$('desc');
   if(cur.desc){

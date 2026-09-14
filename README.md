@@ -106,7 +106,9 @@ the curating:
   has uploaded only Turkish superhero pictures for a decade is not archiving,
   they're curating; their shelf is a channel already. This is where CH 27
   KILINK, CH 28 ANARQUISMO and CH 29 MOMMARTZ come from — lineups no
-  collection query would ever assemble.
+  collection query would ever assemble. One of the 129 is not a shelf at all
+  but a weekly programme with its running order still attached, which is
+  CH 16 SHOCKER and what `drivein.py` is for.
 - **`savant_on_ia.json`** — 800 films Glenn Erickson graded for DVD Savant,
   matched to a free archive.org copy. Becomes CH 34, sorted best-grade-first.
 - **`double_endorsed.json`** — 154 films that sit on a coherent shelf *and*
@@ -225,6 +227,8 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
 | `daypart.py` | Builds CH 01 THE NETWORK — re-deals existing items into a week that runs to a station's day; no network calls |
 | `walk.py` | Builds CH 12 COLLECTORS — imports ia-curation's programmed channel and writes its running order out as fixed blocks; no network calls |
+| `drivein.py` | Re-sculpts CH 16 SHOCKER — sorts the drive-in's 50 nights back into broadcast order, retitles them from ia-curation's untruncated titles, and reads each night's bill out of its blurb |
+| `test_drivein.py` | 21 cases for `drivein.bill()` and `retitle()`; every one a real description off the shelf |
 | `suggest.py` | Builds the seven channels behind the ★ SUGGESTED toggle — six split out of CH 15, one drawn from CH 52; no network calls |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
@@ -236,6 +240,7 @@ python harvest.py        # collection-based channels (~45 min, API-throttled)
 python curated.py        # curator/critic channels from ia-curation (~5 min)
 python sitcom.py         # CH 52 only, merged in place (~1 min)
 python walk.py           # CH 12 COLLECTORS, from ia-curation's channel.json
+python drivein.py        # CH 16 SHOCKER back into broadcast order (~1 min)
 python describe.py       # listing descriptions (skips items that have one)
 python daypart.py        # CH 01 THE NETWORK; needs the genre channels to exist
 python suggest.py        # the ★ SUGGESTED lineup; must run last before build
@@ -254,6 +259,13 @@ that are new to the dial, and descriptions are `describe.py`'s job for every
 channel rather than something each builder does for itself. Run it the other
 way round and CH 12 ships undescribed.
 
+`drivein.py` has the opposite constraint and the same fix — it only reorders
+and retitles what `curated.py` already resolved, so it must run *after* that
+and before `build.py`. It carries any blurb already on an item across, so its
+position relative to `describe.py` does not matter; the bill it writes comes
+from the full description on archive.org rather than the listing-length one
+`describe.py` stores, which is why it fetches at all.
+
 On the other side, `channel.py` in ia-curation has to have run at least once —
 `walk.py` reads `data/channel.json` and does not regenerate it. That is the
 same relationship `curated.py` has with `curators.json`: this repo consumes
@@ -261,8 +273,12 @@ that project's outputs and never re-derives them.
 
 `curated.py` keeps the non-feature channels `harvest.py` produced (its `KEEP`
 set) and replaces the rest, so the usual refresh is `curated.py`, `walk.py`,
-`build.py` — CH 12 is deliberately *not* in `KEEP`, because a stale copy of a
-programmed channel is worse than no channel. `sitcom.py` only ever touches
+`drivein.py`, `build.py` — CH 12 is deliberately *not* in `KEEP`, because a
+stale copy of a programmed channel is worse than no channel. CH 16 does not
+need the same treatment: `curated.py` rebuilds it from the shelf every run and
+`drivein.py` re-sculpts whatever it finds, so the failure mode there is a
+channel that has fallen back to shuffled rather than one that is stale.
+`sitcom.py` only ever touches
 CH 52 — it drops that channel, rebuilds it and merges — so it is safe to re-run
 alone, in any order. CH 52 *is* in `KEEP`, so a refresh doesn't delete a
 channel it has no way to rebuild.
@@ -305,8 +321,9 @@ SAVANT run for over a week.
 
 Channels marked ● are curator shelves from ia-curation — a real point of view,
 not a query. CH 01 is marked ◑: the dayparted channel, and the only one that
-runs on your clock rather than everyone's. CH 12 is marked ◆: the only one
-that arrives already programmed, in an order that means something. CH 52 is
+runs on your clock rather than everyone's. CH 12 and CH 16 are marked ◆: they
+arrive already programmed, in an order that means something, and both ship
+their blocks so the scheduler cannot shuffle them. CH 52 is
 marked †: a hand-written list of public-domain series,
 because no query can tell a free sitcom from a bootlegged one.
 
@@ -323,7 +340,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 13 | HOME MOVIES | Strangers' amateur film | 140 | 36h |
 | 14 | MISSION CTRL | NASA film & mission footage | 129 | 46h |
 | 15 | **DOUBLE** ● | **Endorsed twice, independently** | 153 | 274h |
-| 16 | SHOCKER ● | Internet Drive-In double features | 50 | 172h |
+| 16 | **SHOCKER** ◆ | **The Internet Drive-In, in broadcast order** | 50 | 172h |
 | 17 | CHILLER ● | Hammer, giallo and the nasty years | 110 | 199h |
 | 18 | SILENT ● | The complete silent shelf, 1901–1928 | 130 | 105h |
 | 19 | NOIR ● | The fn01r noir shelf, 1940–1964 | 93 | 153h |
@@ -371,7 +388,7 @@ shelves are noir, and without it CH 19, 20, 33, 42 and 43 would be the same
 twenty films. The exceptions are the two channels that are *views* over the
 dial rather than harvests of it — CH 01 and CH 12 — and both say so.
 
-### CH 12 COLLECTORS — the one channel that was programmed
+### CH 12 COLLECTORS — a channel that was programmed by a graph
 
 Every other channel here is a *lineup*: a set of films, with an order imposed
 afterwards by `packChannel()`, which fills half-hours longest-first and then
@@ -453,6 +470,88 @@ still earning its keep.
 It is not in the ★ SUGGESTED lineup. That service is the double-endorsed films
 split six ways plus the comedy, and this channel overlaps two of those six
 while answering a different question.
+
+### CH 16 SHOCKER — a channel that was programmed by a person
+
+CH 12 had to find an order in a graph. This one was handed an order and threw
+it away for a year.
+
+ia-curation's README is explicit about what this shelf is — "113+ numbered
+weeks of themed double features. **Not a collection, a programme**" — and
+`curated.py` harvested it the way it harvests the other forty: take the
+uploader's items, resolve a playable file, hand the set to `packChannel()`.
+One person ran an internet drive-in weekly from August 2010 to January 2021.
+Every item is a whole night: one video carrying two or three features plus
+trailers, snack-bar ads, an intermission and a cartoon. Fifty of those nights
+are here, and they were being played in a shuffle.
+
+Three things that programme knows:
+
+- **The numbering is real.** Sorted by week, the 51 uploads come out in upload
+  order with exactly one exception — `Week 7 REDO`, a re-upload of week 7's
+  slot, which belongs at 7 and not at its own date. So the week number is the
+  broadcast slot, and it is what `drivein.py` sorts on.
+- **It was written to a calendar.** Sixteen weeks name a season or a holiday,
+  and all sixteen were uploaded in the month they name: Christmas in December
+  (weeks 10, 55, 131), Halloween in October, Mother's Day in May, Father's Day
+  in June, "Icy Italian" in February. Week 18 opens "what better way to warm up
+  a cold February evening" and went up on 9 February. Shuffled, the Christmas
+  triple lands between two summer slasher nights — and `Springtime For Starman`
+  Parts 1 and 2, three weeks apart in April, can play backwards.
+- **The title is the theme, not the bill.** Every listing used to open with the
+  same thirty characters, so fifty rows of the guide read `Shocker Internet
+  Drive In - Week NN: …` and not one of them said what was on.
+
+So the channel now runs week 1 → week 133, ships its blocks like CH 12 so the
+scheduler cannot re-shuffle it, and the seasons come round in order.
+
+**The bill.** The uploader does say what is playing — in the item description,
+in character, and the guide was truncating it at the listing length. Reading
+the features back out of eleven years of freeform barker prose is the only part
+of this that is hard, and `bill()` puts three gates on a quoted title:
+
+| gate | what it rejects |
+|---|---|
+| it is a film | matched against ia-curation's 110,794-title catalog. Removes every quoted adjective — "racist", "massive", "staticky" — without a word list |
+| it is announced | it sits in a clause that presents something. `"Star Wars"` passes the first gate and is a comparison: *"guaranteed to make you yearn for the good old days of"* |
+| it is the feature | the words touching it do not mark it as support. The cartoon, the short subject and the bracketed alternate title are all films too |
+
+That last one is the whole difficulty, because the extras are *named*, quoted,
+and introduced by the same verbs as the features. Week 12 bills `"Drive In
+Massacre"` and a classic `"Popeye"` cartoon. Week 53 announces `"Duck And
+Cover"` — "that classic school house short subject" — with the same "we bring
+you" as the features. Week 56 plays `"The City of The Dead"` *(or "Horror
+Hotel" — which ever scares you the most)*, which is one picture with two names.
+Week 113 opens with `"Missile To The Moon"`, "a 1958 low budget remake of
+`"Cat-Women Of The Moon"`", which is not playing.
+
+Then a check rather than a guess: where the night declares how many features it
+has, the count has to match, and **the blurb outranks the title when they
+differ** — week 41 is headed `"Boo's For Bela" Double Feature` and then shows
+three Lugosi pictures. Where it does not match, the week bills nothing and the
+barker prose still describes the night. **27 of the 50 are billed**; the rest
+fail closed, mostly because the film is missing from the catalog under that
+spelling. ia-curation says this twice about its own bugs and it is the rule
+here too: a wrong answer is much worse than a missing one.
+
+`test_drivein.py` pins 21 cases, every one a real description off this shelf,
+and the rejections are the point. Two of them exist because the first version
+got them wrong: splitting sentences on every `. ` cuts "the George A. Romero
+classic" in half and strands *Night of the Living Dead* in a fragment with no
+verb in it, and a rule strict enough to stop `Week 13: "Demented" Double
+Feature` quoting its own name at us also throws out `Week 4 - Night of the
+Living Dead Double Feature`, which is titled after the picture it opens with.
+
+**What is on the screen**: the panel carries a `TONIGHT` line — *The Giant Gila
+Monster · The Killer Shrews · Attack of The Giant Leeches* — and the grid
+tooltip carries the same list under the week. It hides on narrow windows
+alongside the blurb, because half a film title cut at the panel edge is worse
+than sending the viewer to the grid.
+
+Week 38, `"Sexy Summer Sin"`, is the one night on the shelf that is not here:
+`harvest.DENY` holds `"sex"` and matches it. That is a substring hit on
+"Sexy" rather than the word the list means, but it is the guide's own content
+policy for unattended scheduling and this file does not overrule it.
 
 ### CH 01 THE NETWORK — the one channel with a clock
 
