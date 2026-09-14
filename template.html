@@ -112,6 +112,9 @@
   /* cinema mode: the fallback when the Fullscreen API is unavailable —
      the picture takes the whole window, guide and side panel step aside */
   body.cinema .top{flex:1 1 auto;border-bottom:0}
+  /* the mobile 16:9 box must not survive into either full-screen path, where
+     the picture is supposed to take the whole window */
+  body.cinema .screen,.screen:fullscreen{aspect-ratio:auto;flex:1 1 auto}
   body.cinema .side,body.cinema .guide{display:none}
   body.cinema .exitcine{display:flex}
   .exitcine{
@@ -288,6 +291,22 @@
     .nowtitle{font-size:13px;-webkit-line-clamp:2}
     :root{--chan-w:118px;--pps:0.0777}
     .ctrls{margin:0}
+  }
+
+  /* Size .top to its contents and give the picture a real box. At a fixed 42%
+     the screen got whatever .side had left over -- 113px, the smallest panel
+     on the page, on a phone held to watch television.
+     4:3 rather than 16:9 because that is what the library is: of a sample
+     across the lineup, 8 of 12 programmes were 4:3 (median 1.33). Academy
+     content then fills 375x281 instead of pillarboxing to 281x211, and the
+     widescreen minority letterboxes to 375x211 in either box -- so 4:3 is
+     never the worse choice here.
+     PORTRAIT ONLY: a phone in landscape is ~812x375, which still matches
+     max-width:860px, and a full-width 4:3 box there is 609px tall in a 375px
+     viewport -- it pushed the guide to zero height. */
+  @media (max-width:860px) and (orientation:portrait){
+    .top{flex:0 0 auto}
+    .screen{flex:0 0 auto;width:100%;aspect-ratio:4/3}
   }
 </style>
 </head>
