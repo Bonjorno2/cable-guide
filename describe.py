@@ -29,6 +29,12 @@ STRIP_PREFIX = [
     r"^Synopsis:\s*",
     r"^Plot:\s*",
     r"^From the [A-Z][\w ]+ collection[.:]\s*",
+    # A donation appeal standing where the description should be. The silent
+    # shelf's uploader opens 229 items with this one and nothing else, so
+    # without the cut a quarter of CH 18's listings read "This gem is presented
+    # by Silent Hall of Fame." instead of saying what is on.
+    r"(?i)^This (?:gem|film|movie|video) is (?:presented|brought to you) by "
+    r"[^.]{0,60}\.\s*",
 ]
 # Lines that are provenance, not programme description.
 JUNK = re.compile(
@@ -43,11 +49,24 @@ DROP_SENT = re.compile(
     # uploaders narrating their own transfer rather than the programme
     r"|\bi (remember|found|have|got|ripped|recorded|uploaded)\b|\bmy (copy|collection|vhs)\b"
     r"|this one was|gotten from|ripped from|taken from (a|an|my)|recorded (off|from)"
-    r"|\bold hard drive\b|\bpart of a dvd\b|\bvhs (tape|rip)\b|\benjoy!?\b)")
+    r"|\bold hard drive\b|\bpart of a dvd\b|\bvhs (tape|rip)\b|\benjoy!?\b"
+    # A pointer to where the description is, in the place the description goes.
+    r"|you can (find out|read) more about)")
 
 # Catalogue records: "KEYSTONE 1015 ft., rel. Feb. 9 1914 dir. ... cast: ..."
 # Informative, but not a listing description.
 CREDITS = re.compile(r"(?i)(\bcast:|\bcam\.\s|\d+\s*ft\.,|\breel,\s*rel\.|\brel\.\s*\w+\.?\s*\d+,\s*\d{4})")
+
+# A social plug wedged into the prose. DROP_SENT cannot reach these: they carry
+# no terminal punctuation, so the sentence splitter glues the handle to the
+# front of the real description and the whole thing survives as one sentence —
+# which is how 55 listings came to open "FEEL FREE TO FOLLOW US ON TWITTER
+# @SilentFilmGems" and then describe the film.
+# "us" is required and not optional on purpose: without it the pattern eats the
+# front of "follow the trail of", which is prose.
+PLUG = re.compile(r"(?i)\s*(?:feel free to\s+|please\s+)?"
+                  r"(?:follow|like|subscribe to)\s+us\s+(?:on\s+)?"
+                  r"[a-z]+\s*@?[\w.-]*\s*")
 
 
 def sentences(t):
@@ -63,6 +82,7 @@ def clean(t):
     t = html.unescape(t)
     t = t.replace(" ", " ")
     t = re.sub(r"\s+", " ", t).strip()
+    t = PLUG.sub(" ", t).strip()
     # Boilerplate nests: the newsreels arrive as
     #   National Archives description: "The original release sheet reads: ...
     # so a single pass leaves the inner prefix behind a quote mark.
@@ -97,7 +117,14 @@ def shorten(t, n=MAXLEN):
     return cut + "…"
 
 
-def meta_description(ident):
+def meta_raw(ident):
+    """The item's description field, untouched.
+
+    Kept separate from meta_description() because the cleaning rules exist to
+    throw away exactly the sentences a caller may need to *read*: suggest.py
+    rejects an item whose uploader says it is a preview, and by the time this
+    file is done with the text that sentence has been cut.
+    """
     url = f"https://archive.org/download/{ident}/{ident}_meta.xml"
     try:
         with urllib.request.urlopen(
@@ -106,7 +133,11 @@ def meta_description(ident):
     except Exception:
         return ""
     parts = [e.text or "" for e in root.findall("description")]
-    return clean(" ".join(parts))
+    return re.sub(r"<[^>]+>", " ", html.unescape(" ".join(parts)))
+
+
+def meta_description(ident):
+    return clean(meta_raw(ident))
 
 
 def load(name):
@@ -164,11 +195,18 @@ def echoes_title(title, desc):
     again. The guide shows both in the same tooltip, so storing it buys a
     second line that says nothing; better to leave the programme undescribed
     and let the listing be short.
+
+    Opening with the title is not enough to be an echo, and the length check is
+    what says so. Plenty of real descriptions start that way -- "The Upturned
+    Glass is a 1947 British film noir psychological thriller directed by
+    Lawrence Huntington" -- and they only began tripping this when the titles
+    got clean enough to match. An echo is the title and nothing else: a year, a
+    bracket, a dozen characters at most.
     """
     def norm(s):
         return re.sub(r"[^a-z0-9]", "", (s or "").lower())
     t, d = norm(title), norm(desc)
-    return len(t) >= 10 and d.startswith(t[:30])
+    return len(t) >= 10 and d.startswith(t[:30]) and len(d) - len(t) < 12
 
 
 def main():

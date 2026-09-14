@@ -165,7 +165,7 @@ Three details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,609 of 4,179 slots (86%) carry a listing description** — 3,697 of those
+**3,929 of 4,179 slots (94%) carry a listing description** — 3,697 of those
 slots are distinct programmes, the rest being CH 01, CH 11 and CH 12 replaying
 the dial. From two sources, best first:
 
@@ -186,27 +186,47 @@ most of that file, and each rule came from reading what actually came back:
 | uploader narrating the transfer | *"This one was gotten from an old hard drive… I remember"* |
 | catalogue records, not synopses | `KEYSTONE 1015 ft., rel. Feb. 9 1914 dir. … cast: …` |
 | Wikipedia attribution prefix | *"The following concise, informative description was taken from…"* |
+| a donation appeal where the description goes | *"This gem is presented by Silent Hall of Fame."* — **129 listings were that sentence and nothing else** |
+| a social plug wedged into the prose | *"FEEL FREE TO FOLLOW US ON TWITTER @SilentFilmGems"* |
+| a pointer to the description instead of one | *"You can find out more about this movie from Wikipedia and…"* |
 
 Filtering happens per *sentence*, not per description, so a good synopsis that
 merely ends with a link keeps the synopsis. Anything left under 25 characters
 is dropped rather than shown as a stub.
 
-One more rule accounts for most of the missing 16%: a description that only
-restates the title is dropped. 356 items had one — CH 53 alone had 81, CH 19
-had 52 — and since the guide prints title and description into the same
-tooltip, keeping them bought a second line that read as a stutter. Coverage
-fell from 94% to 84% when they went, which is the honest number: those 356
-were never carrying information. It is back to 86% since the CH 52 rebuild —
-the season packs and bare series titles that went were also the items least
-likely to carry a description.
+The social plug is the one that cannot be done per sentence. It carries no
+terminal punctuation, so the splitter glues the handle onto the front of the
+real description and the whole thing survives as one sentence — which is how
+55 listings came to open *FEEL FREE TO FOLLOW US ON TWITTER @SilentFilmGems*
+and then describe the film. It is cut inline instead, and the pattern requires
+the literal "us", because without it the same rule eats the front of *"follow
+the trail of…"*, which is prose.
+
+One more rule: a description that only restates the title is dropped, since
+the guide prints both into the same tooltip and keeping them buys a second
+line that reads as a stutter. **Opening with the title is not enough to be an
+echo** — that was the rule until the suggested lineup got clean enough titles
+to trip it. *The Upturned Glass is a 1947 British film noir psychological
+thriller directed by Lawrence Huntington* is a real description, and it only
+started matching when the listing stopped reading `The Upturned Glass (1947,
+UK) James Mason, Pamela Kellino - Fi`. An echo is now the title and a dozen
+characters at most: a year, a bracket, nothing with a clause in it.
+
+Coverage went **86% → 94%** across those changes. The donation appeal
+accounts for most of it, in two directions at once: 129 listings that said
+nothing were dropped, and the refetch that followed reached the real prose
+underneath — the appeal had been filling the 190-character budget, so the
+sentence describing the film never made it into the store.
 
 `--repolish` re-runs the cleaning rules over descriptions already stored, with
 no network, which is how to iterate on those rules without a four-minute
 refetch.
 
-**Size**: descriptions roughly doubled `index.html`, 616 KB → **1.4 MB**
-(441 KB gzipped, which is what a static host actually sends). Lower `MAXLEN`
-in `describe.py` and re-run `--repolish` if that matters more than the prose.
+**Size**: descriptions roughly doubled `index.html`, 616 KB → **1.6 MB**
+(499 KB gzipped, which is what a static host actually sends; the three
+channels added to the suggested lineup are the last 180 KB of the raw file).
+Lower `MAXLEN` in `describe.py` and re-run `--repolish` if that matters more
+than the prose.
 
 ### The speed trick, taken from ia-curation's README
 
@@ -230,7 +250,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `drivein.py` | Re-sculpts CH 16 SHOCKER — sorts the drive-in's 50 nights back into broadcast order, retitles them from ia-curation's untruncated titles, and reads each night's bill out of its blurb |
 | `test_drivein.py` | 21 cases for `drivein.bill()` and `retitle()`; every one a real description off the shelf |
 | `evening.py` | Builds CH 11 THE EVENING — pairs CH 52's half-hours with graded features over the cross-medium co-favourite graph; no network calls |
-| `suggest.py` | Builds the seven channels behind the ★ SUGGESTED toggle — six split out of CH 15, one drawn from CH 52; no network calls |
+| `suggest.py` | Builds the ten channels behind the ★ SUGGESTED toggle — six split out of CH 15, one drawn from CH 52, three from ia-curation's collector signal. 01–08 need no network; 09 and 10 resolve the ~100 items the dial has never carried |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
 | `build.py` | Inlines `channels.json` into the template → `index.html` |
@@ -246,6 +266,7 @@ python describe.py       # listing descriptions (skips items that have one)
 python daypart.py        # CH 01 THE NETWORK; needs the genre channels to exist
 python evening.py        # CH 11 THE EVENING; needs CH 52 and the graded films
 python suggest.py        # the ★ SUGGESTED lineup; must run last before build
+                         #   (~1 min: CH 09 and CH 10 resolve what the dial lacks)
 python build.py          # regenerate index.html
 ```
 
@@ -260,6 +281,15 @@ too, so re-running it on its own is free of side effects.
 that are new to the dial, and descriptions are `describe.py`'s job for every
 channel rather than something each builder does for itself. Run it the other
 way round and CH 12 ships undescribed.
+
+`suggest.py` is the one exception to that, and it earns it. It has to run
+*after* `describe.py` for the reason above, and `describe.py` only walks the
+dial, so nothing else can ever reach the suggested lineup's own items. More to
+the point it is already reading the description field of every candidate — that
+is what tells a preview from a film — so describing from the same read costs
+nothing, where a second pass would cost a second fetch of the same bytes. It
+imports `describe`'s rules rather than reimplementing them, so there is still
+one set of cleaning rules in the repo.
 
 `drivein.py` has the opposite constraint and the same fix — it only reorders
 and retitles what `curated.py` already resolved, so it must run *after* that
@@ -471,9 +501,9 @@ and *The Two Faces of Dr. Jeykll* are new material, and `walk.py` prints that
 count on every run, because it is the number that says whether the graph is
 still earning its keep.
 
-It is not in the ★ SUGGESTED lineup. That service is the double-endorsed films
-split six ways plus the comedy, and this channel overlaps two of those six
-while answering a different question.
+It is not in the ★ SUGGESTED lineup. That service sorts films by how they were
+endorsed rather than by how they were programmed, and this channel overlaps two
+of its six critic-backed channels while answering a different question.
 
 ### CH 11 THE EVENING — a channel built out of somebody else's bug
 
@@ -700,6 +730,9 @@ opens straight into it.
 | 05 | SILENT | 18 films | 16 excellent | 34.0h | 16% |
 | 06 | ODDMENTS | 10 films | 8 excellent | 18.0h | 13% |
 | 07 | COMEDY | 62 episodes | 6 series | 31.0h | 14% |
+| 08 | **TRIPLE** | 58 films | 36 excellent | 106.5h | 15% |
+| 09 | **ONE REEL** | 134 films | 1897–1928 | 33.5h | 18% |
+| 10 | **CRIME** | 89 films | 1941–1959 | 148.5h | 15% |
 
 Channels 01–06 are CH 15 DOUBLE split up — the films a curator shelf and a
 critic both vouched for. The six noir shelves among them do not pool into one
@@ -708,6 +741,112 @@ the dial held half the service. The split follows the line the shelves already
 draw — two are organised around a director, the rest around the films — which
 gives a viewer a reason to switch rather than an even cut by count. DIRECTORS
 is the densest channel on either dial: 12 of its 16 films are graded Excellent.
+
+### 08, 09 and 10 — the third signal
+
+`fav_analyze.py` in ia-curation scores the `fav-<user>` collections every
+archive.org item already carries, the same way `analyze.py` scored uploaders:
+what counts is not how many people favourited a film but how many people with
+a demonstrable shelf of their own did. Its join against the other two signals
+is an arithmetic table, and these three channels are two of its rows.
+
+| signals | films | |
+|---|---|---|
+| all three | 59 | → **CH 08 TRIPLE** |
+| shelf + collectors, no critic | 478 | → **CH 09** and **CH 10** |
+
+**CH 08 TRIPLE** is the strongest claim the curation can make, and until now it
+was on neither dial — the 59 were a number in a JSON file. Every one of its
+films also plays on 01–06, because the 59 are a subset of the 155 those six
+split up; that is the same bargain CH 01 and CH 12 make on the main dial, and
+the tag says *endorsed three times* where the others say twice. 58 of the 59,
+in fact: *World on a Wire* runs 212 minutes, which is outside the duration band
+CH 15 was harvested with, so there is no resolved copy on the dial to draw
+from. `suggest.py` prints that name on every run rather than reporting 58 as
+though it were the whole set.
+
+**09 and 10 are the half with new material in it.** Erickson was reviewing
+DVDs, so the shelves he never touched — the silent one-reelers, the noir bench
+nobody pressed a disc of — reach a vouched-for service only through the people
+who collected them. 55 programmes on the suggested lineup are on no channel of
+the main dial at all, and all 55 arrived this way.
+
+Where that pool splits is not a judgement call; it splits itself. 354 of the
+478 survive the cuts below, and of those, 199 are silent-era — median 12.5
+minutes — and 90 are crime features from 1941 to 1959. The 65 left over are
+two and three films off a dozen different shelves, which is a leftovers drawer
+and not a channel, so they stay off.
+So CH 09 ONE REEL is Méliès and Chomón trick films, Griffith Biographs, Bitzer
+actualities, Keaton and Chaplin shorts and nine chapters of *The Perils of
+Pauline* — the only short-form film channel on either dial, and the texture
+this service did not have. CH 10 CRIME is the noir the critic never graded:
+*The Killers*, *Scarlet Street*, *Odds Against Tomorrow*, *99 River Street*,
+*Murder by Contract*.
+
+The panel says **`16 collectors kept this`**, for the reason CH 12's panel
+names its graph finds: a grade is a badge and a shelf is the channel, but the
+third signal is invisible unless the listing says it — and on these two
+channels it is the *only* endorsement a viewer could otherwise see, since they
+are by construction the films with no grade.
+
+#### What had to be cut, and how it was found
+
+Every one of these was found by reading the list, which is the standing lesson
+of this project rather than a formality:
+
+| cut | why |
+|---|---|
+| Grindhouse International, 117 films | sexploitation. Dropped as a whole shelf, because exactly one title in 204 trips a keyword filter |
+| Black-and-White Benchmarks, kept off CH 10 | noir, but an upscaler's shelf of *Gilda*, *Double Indemnity* and *Gaslight* — on archive.org without being free to rebroadcast |
+| **21 previews and clips** | see below |
+| 6 items by name | a 1903 ethnic caricature; a Bert Williams film in burnt cork; a 1928 road-show exploitation picture; a 2015 documentary *about* silent film on a channel *of* it; two trailers |
+
+The name list is matched against the **raw** title as well as the cleaned one,
+which the trailers are the reason for: `"The Big City" (1928) starring Lon
+Chaney and Marceline Day - a trailer` cleans up to `The Big City`, so the words
+that condemn it are exactly the ones the cleaner exists to remove. It had been
+falling out on a duration band instead, which is luck rather than a rule.
+
+The previews are the one worth keeping. The silent shelf's uploader is a
+non-profit that posts a one-minute taste and sells the full print — so the
+pool contained an item called *The Cameraman*, 132 seconds long, and *Rosita*,
+*The Scarlet Letter* and *So This is Paris* at four and five minutes each. A
+listing that says The Cameraman and plays two minutes of it is worse than not
+carrying the film. Nine were marked in the file name (`The-Cameraman-clip.mp4`,
+`Preview-MansGenesis.mp4`) and the rest only in the description — *"This is a
+short preview. You can watch the whole film here…"* — which is why
+`suggest.py` reads the raw description field before the cleaning rules get to
+it, and tests both. A duration floor would not have worked: a 1904 Bitzer
+actuality genuinely is ninety seconds, and it is the oldest thing on the dial.
+
+#### Titles, again
+
+09 and 10 re-clean their titles through ia-curation's `titles.py` rather than
+reusing the dial's, for the reason `walk.py` gives — these uploaders catalogue
+inside the title, and the guide's `clean()` leaves `"1776, or The Hessian
+Renegades"` in its quote marks and truncates `Big Town After Dark (1947, USA)
+Phillip Reed, Hillary Brooke - Film No` at seventy characters. Three things
+that needed adding on top:
+
+- **A serial gets its chapter number back.** Ten listings reading LES VAMPIRES
+  is not a listing. `Episode 5-Dead Man's Escape` gives back the name too;
+  `Ch. 6 Pearl White` gives back only the number, because what follows an
+  unhyphenated number on that shelf is the cast.
+- **A parenthesised year that holds anything else, closed or not.** Both
+  cleaners want the year alone in the brackets, so `Gunman in the Streets (1950
+  USA / France) Dane Clark, Simone Signoret` came through as `Gunman in the
+  Streets Dane Clark,` and `Highway Dragnet (1954 Richard Conte, Joan Bennett`
+  never closes its bracket at all.
+- **A front-trim has to be earned.** This is the one edit either cleaner makes
+  that can take a word of the *actual* title, and it does: `2 A.M. in the
+  Subway` came back as `A.M. in the Subway` because a leading number reads as a
+  file index, and `Man's Genesis` came back as `Genesis` because a capitalised
+  possessive reads as `Buster Keaton's`. So ask the shelf. A prefix that is
+  cataloguing recurs across it — *Buster Keaton's* fifteen times, a leading
+  index on all twelve East Side Kids — and a prefix that is part of a title
+  appears once. Below three the cut is refused and the prefix put back, which
+  fixes `Man's Genesis`, `2 A.M. in the Subway`, `Hell's Island` and `99 River
+  Street` without touching the forty-five it gets right.
 
 ### CH 07 COMEDY, and one weaker claim
 
@@ -740,7 +879,10 @@ compilations for every four television episodes, which is what `SHOUTING` in
 Ad breaks pull from 150 spots in `classic_tv_commercials`. `build.py` prints
 this table, including the ad share, on every build — worth glancing at after
 changing a lineup, since a channel whose item durations tile badly into half
-hours will show up here as an ad share well above 30%.
+hours will show up here as an ad share well above 30%. It prints the suggested
+lineup as a second table, because that lineup is packed separately and a
+channel of half-hour shorts tiles into the grid nothing like a channel of
+90-minute features. ONE REEL, the one most at risk of it, comes out at 18%.
 
 To add a channel, append a spec to `CHANNELS` in `harvest.py` — a search query
 plus a duration band (`lo`/`hi` in seconds) that suits the format — then run
