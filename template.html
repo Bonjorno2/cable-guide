@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>THE GUIDE — Continuous Programming</title>
+<style>
+  :root{
+    --blue-1:#1c1a8f;  --blue-2:#2a1f9e;  --purple:#4a1c8c;
+    --panel:#0e0b45;
+    --cell:#2320a8;    --cell-alt:#2b1f9b;
+    --live:#ff2d2d;
+    --ink:#ffffff;
+    --dim:#b9b6ff;
+    --gold:#ffd24a;
+    --grid-h:34px;
+    --chan-w:172px;
+    --pps:0.10555;            /* px per second -> 30min = 190px */
+    --font: 'Arial Narrow','Arial Black',Arial,Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  /* Several overlays below set an explicit `display`, which would otherwise
+     beat the UA's [hidden]{display:none} and leave them permanently on. */
+  [hidden]{display:none !important}
+  html,body{height:100%}
+  body{
+    background:#07052a; color:var(--ink); font-family:var(--font);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+  /* ---------- TOP HALF : player + now/next ---------- */
+  .top{
+    flex:0 0 46%; display:flex; min-height:0;
+    background:linear-gradient(160deg,var(--blue-1),var(--purple) 70%,#120a4a);
+    border-bottom:3px solid #0a0730;
+  }
+  .screen{
+    position:relative; flex:1 1 auto; min-width:0; background:#000;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  /* Both players are always laid in; the standby one is transparent rather
+     than display:none so the browser keeps decoding it while it waits. */
+  .screen video.tv{position:absolute;inset:0;width:100%;height:100%;
+    object-fit:contain;background:#000;opacity:0;z-index:1}
+  .screen video.tv.live{opacity:1;z-index:2}
+
+  .bug{
+    position:absolute; left:14px; bottom:12px; z-index:4;
+    display:flex; align-items:center; gap:9px;
+    padding:6px 12px 6px 9px; border-radius:3px;
+    background:rgba(6,4,40,.74); border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(3px); letter-spacing:.06em;
+  }
+  .bug .n{font-size:21px;font-weight:900;color:var(--gold);line-height:1}
+  .bug .t{font-size:11px;color:#dcd9ff;text-transform:uppercase;line-height:1.25}
+  .bug.brk .n{color:#ff7a7a}
+
+  /* ---- station ident ---- */
+  .ident{
+    position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;
+    background:linear-gradient(165deg,#141079,#2a1170 60%,#08052e);
+  }
+  .bars{flex:0 0 22%;background:linear-gradient(90deg,
+    #c0c0c0 0 14.285%,#c0c000 14.285% 28.57%,#00c0c0 28.57% 42.855%,
+    #00c000 42.855% 57.14%,#c000c0 57.14% 71.425%,#c00000 71.425% 85.71%,
+    #2020c0 85.71% 100%)}
+  .identbody{flex:1 1 auto;display:flex;align-items:center;justify-content:center;
+    gap:clamp(12px,2.4vw,28px);padding:0 20px}
+  .identnum{font-size:clamp(52px,9vw,120px);font-weight:900;color:var(--gold);
+    line-height:.86;text-shadow:5px 5px 0 rgba(0,0,0,.55)}
+  .identname{font-size:clamp(17px,3vw,40px);font-weight:900;letter-spacing:.13em;
+    text-shadow:3px 3px 0 rgba(0,0,0,.45)}
+  .identtag{font-size:clamp(9px,1.2vw,13px);letter-spacing:.24em;color:var(--dim);
+    text-transform:uppercase;margin-top:6px}
+  .identfoot{flex:0 0 auto;text-align:center;padding:0 0 14px;font-size:10px;
+    letter-spacing:.5em;color:rgba(255,255,255,.5)}
+
+  /* ---- up-next lower third ---- */
+  .lower{
+    position:absolute;right:0;bottom:14%;z-index:5;display:flex;align-items:center;gap:10px;
+    padding:7px 16px 7px 12px;background:linear-gradient(90deg,rgba(10,6,60,.2),rgba(10,6,60,.9) 22%);
+    border-left:3px solid var(--gold);animation:slidein .45s ease-out;max-width:74%;
+  }
+  .lower b{font-size:9.5px;letter-spacing:.24em;color:var(--gold);flex:0 0 auto}
+  .lower span{font-size:12.5px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  @keyframes slidein{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
+
+  /* Fullscreen applies to the whole .screen box, not the <video>, so the
+     channel bug, the ident card and the up-next strip come with it. */
+  .screen:fullscreen{background:#000}
+  .screen:fullscreen .bug,body.cinema .bug{left:26px;bottom:26px;padding:9px 17px 9px 13px}
+  .screen:fullscreen .bug .n,body.cinema .bug .n{font-size:30px}
+  .screen:fullscreen .bug .t,body.cinema .bug .t{font-size:14px}
+  .screen:fullscreen .lower,body.cinema .lower{bottom:10%;padding:11px 26px 11px 18px}
+  .screen:fullscreen .lower span,body.cinema .lower span{font-size:17px}
+  .screen:fullscreen .lower b,body.cinema .lower b{font-size:11px}
+
+  /* cinema mode: the fallback when the Fullscreen API is unavailable —
+     the picture takes the whole window, guide and side panel step aside */
+  body.cinema .top{flex:1 1 auto;border-bottom:0}
+  body.cinema .side,body.cinema .guide{display:none}
+  body.cinema .exitcine{display:flex}
+  .exitcine{
+    display:none;position:fixed;top:16px;right:18px;z-index:40;align-items:center;gap:8px;
+    padding:8px 14px;font-family:var(--font);font-size:10px;letter-spacing:.18em;
+    font-weight:700;color:#dedcff;background:rgba(6,4,40,.72);
+    border:1px solid rgba(255,255,255,.3);cursor:pointer;text-transform:uppercase;
+  }
+  .exitcine:hover{background:var(--gold);color:#140a3a;border-color:var(--gold)}
+
+  .static{
+    position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;
+    background-image:var(--noise); background-size:180px 180px;
+    transition:opacity .09s linear;
+  }
+  .static.on{opacity:.85}
+
+  .powerwrap{
+    position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:20px;cursor:pointer;
+    background:radial-gradient(ellipse at center,#181366,#05032a 72%);
+  }
+  .powerwrap h1{font-size:clamp(26px,4.4vw,56px);letter-spacing:.19em;font-weight:900;
+    text-shadow:3px 3px 0 #000,0 0 34px rgba(120,110,255,.6)}
+  .powerwrap p{color:var(--dim);font-size:12.5px;letter-spacing:.19em;text-transform:uppercase}
+  .powerbtn{
+    padding:13px 34px;border:2px solid var(--gold);color:var(--gold);
+    font-size:15px;letter-spacing:.24em;font-weight:900;border-radius:2px;
+    background:rgba(255,210,74,.07);
+  }
+  .powerwrap:hover .powerbtn{background:var(--gold);color:#140a3a}
+
+  .side{
+    flex:0 0 clamp(250px,26%,352px); padding:14px 16px; display:flex;
+    flex-direction:column; gap:10px; min-width:0; overflow:hidden;
+  }
+  .clock{display:flex;align-items:baseline;gap:10px;border-bottom:2px solid rgba(255,255,255,.22);padding-bottom:7px}
+  .clock .hm{font-size:clamp(24px,2.6vw,33px);font-weight:900;letter-spacing:.03em;line-height:1;
+    white-space:nowrap;text-shadow:2px 2px 0 rgba(0,0,0,.45)}
+  .clock .dt{font-size:10.5px;color:var(--dim);letter-spacing:.13em;text-transform:uppercase}
+
+  .lbl{font-size:10px;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:3px}
+  .nowtitle{font-size:18px;font-weight:900;line-height:1.14;letter-spacing:.01em;
+    text-shadow:2px 2px 0 rgba(0,0,0,.4);
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .nowmeta{font-size:11px;color:var(--dim);letter-spacing:.09em;margin-top:5px;text-transform:uppercase}
+
+  /* critic grade + director, where the curation knows them */
+  .cred{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap}
+  .cred b{font-size:9px;letter-spacing:.17em;padding:3px 7px;border-radius:2px;
+    background:#2d2a86;color:#cfccff;font-weight:900}
+  .cred b.gExcellent{background:var(--gold);color:#140a3a}
+  .cred b.gVeryGood{background:#7ee08a;color:#0d2a12}
+  .cred b.gGood{background:#5f8ddb;color:#06142e}
+  .cred span{font-size:11px;color:var(--dim);letter-spacing:.05em;
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+
+  .bar{height:7px;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.2);margin-top:9px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ff9b3d);width:0}
+  .joined{font-size:10.5px;color:#ffb3b3;letter-spacing:.11em;margin-top:5px;text-transform:uppercase;min-height:13px}
+
+  /* The blurb takes the slack between "now" and "next", but it yields:
+     min-height:0 lets it be clipped rather than pushing the controls out. */
+  .nowblock{min-height:0;overflow:hidden;flex:0 1 auto}
+  .desc{font-size:11.5px;line-height:1.45;color:#cbc8f2;margin-top:11px;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .desc cite{font-style:normal;color:var(--gold);letter-spacing:.14em;font-size:8.5px;
+    display:block;margin-top:5px;text-transform:uppercase}
+
+  .next{margin-top:auto;flex:0 0 auto;border-top:2px solid rgba(255,255,255,.22);padding-top:8px}
+  .nexttitle{font-size:12.5px;color:#e7e5ff;line-height:1.25;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+  .ctrls{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .ctrls button{
+    font-family:var(--font);font-size:10px;letter-spacing:.13em;font-weight:700;
+    padding:6px 10px;color:#dedcff;background:rgba(255,255,255,.09);
+    border:1px solid rgba(255,255,255,.28);cursor:pointer;text-transform:uppercase;
+  }
+  .ctrls button:hover{background:var(--gold);color:#140a3a;border-color:var(--gold)}
+  .vol{width:72px;accent-color:var(--gold);cursor:pointer;align-self:center}
+
+  /* ---------- BOTTOM HALF : the grid ---------- */
+  .guide{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;
+    background:linear-gradient(180deg,var(--blue-2),var(--purple))}
+
+  .times{display:flex;flex:0 0 27px;background:#100c56;border-bottom:2px solid #07052a;
+    position:relative;z-index:3}
+  .times .corner{flex:0 0 var(--chan-w);border-right:2px solid #07052a;
+    display:flex;align-items:center;padding-left:11px;font-size:10px;
+    letter-spacing:.22em;color:var(--gold);font-weight:700}
+  .times .track{position:relative;flex:1 1 auto;overflow:hidden}
+  .times .track .inner{position:absolute;inset:0;will-change:transform}
+  .times .slot{position:absolute;top:0;height:100%;display:flex;align-items:center;
+    padding-left:9px;font-size:11px;font-weight:700;letter-spacing:.09em;
+    border-left:2px solid rgba(255,255,255,.3)}
+
+  .rowsclip{position:relative;flex:1 1 auto;overflow:hidden}
+  .rowsmove{position:absolute;left:0;right:0;top:0;will-change:transform}
+
+  .row{display:flex;height:var(--grid-h);cursor:pointer}
+  .row .cn{
+    flex:0 0 var(--chan-w);display:flex;align-items:center;gap:9px;padding:0 9px;
+    background:#100c56;border-right:2px solid #07052a;border-bottom:1px solid #07052a;
+  }
+  .row .cn b{font-size:17px;font-weight:900;color:var(--gold);min-width:25px;line-height:1}
+  .row .cn span{font-size:11px;letter-spacing:.09em;color:#efeeff;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis}
+  .row.on .cn{background:var(--gold)}
+  .row.on .cn b,.row.on .cn span{color:#140a3a}
+
+  .row .track{position:relative;flex:1 1 auto;overflow:hidden;border-bottom:1px solid #07052a}
+  .row .track .inner{position:absolute;inset:0;will-change:transform}
+  .row:nth-child(even) .track{background:rgba(0,0,0,.1)}
+
+  .prog{
+    position:absolute;top:2px;bottom:2px;background:var(--cell);
+    border-left:2px solid rgba(255,255,255,.34);
+    display:flex;align-items:center;padding:0 9px;overflow:hidden;
+    font-size:11.5px;letter-spacing:.02em;white-space:nowrap;text-overflow:ellipsis;
+  }
+  .prog.live{background:#3c33d6;box-shadow:inset 0 0 0 1px rgba(255,255,255,.32)}
+  .row.on .prog{background:#4a3fe0}
+  .row.on .prog.live{background:#6a5cff}
+  .prog em{font-style:normal;color:var(--dim);font-size:10px;margin-left:7px}
+  .prog i.star{font-style:normal;color:var(--gold);font-size:10px;margin-right:5px;flex:0 0 auto}
+  .row:hover .prog{background:#3a31c4}
+
+  .nowline{position:absolute;top:0;bottom:0;width:2px;background:var(--live);
+    z-index:5;pointer-events:none;box-shadow:0 0 9px rgba(255,45,45,.85)}
+
+  .hint{position:absolute;right:9px;bottom:6px;z-index:6;font-size:9.5px;
+    letter-spacing:.15em;color:rgba(255,255,255,.42);pointer-events:none;text-transform:uppercase}
+
+  .dial{
+    position:fixed;top:22px;right:26px;z-index:30;font-size:58px;font-weight:900;
+    color:var(--gold);text-shadow:4px 4px 0 rgba(0,0,0,.62);letter-spacing:.07em;
+    opacity:0;transition:opacity .18s;pointer-events:none;
+  }
+  .dial.on{opacity:1}
+
+  @media (max-width:860px){
+    .top{flex-basis:42%;flex-direction:column}
+    .side{flex:0 0 auto;flex-direction:row;flex-wrap:wrap;gap:8px 14px;padding:9px 12px;align-items:center}
+    .side .next,.side .bar,.side .joined,.side .desc{display:none}
+    .clock{border:0;padding:0}
+    .nowtitle{font-size:13px;-webkit-line-clamp:2}
+    :root{--chan-w:118px;--pps:0.0777}
+    .ctrls{margin:0}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="top">
+    <div class="screen" id="screen">
+      <!-- two players: one on air, one quietly loading whatever is next -->
+      <video id="vA" class="tv live" playsinline preload="auto"></video>
+      <video id="vB" class="tv" playsinline preload="auto"></video>
+      <div class="static" id="static"></div>
+
+      <!-- station ident: a real scheduled segment, not an overlay effect -->
+      <div class="ident" id="ident" hidden>
+        <div class="bars"></div>
+        <div class="identbody">
+          <div class="identnum" id="identNum">02</div>
+          <div>
+            <div class="identname" id="identName"></div>
+            <div class="identtag" id="identTag"></div>
+          </div>
+        </div>
+        <div class="identfoot">THE GUIDE</div>
+      </div>
+
+      <div class="lower" id="lower" hidden><b>UP NEXT</b><span id="lowerT"></span></div>
+      <div class="bug" id="bug" hidden><div class="n" id="bugN">02</div><div class="t" id="bugT"></div></div>
+      <div class="powerwrap" id="power">
+        <h1>THE&nbsp;GUIDE</h1>
+        <p>Continuous programming from the Internet Archive</p>
+        <div class="powerbtn">▶&nbsp;&nbsp;POWER ON</div>
+        <p style="font-size:10px;opacity:.6">Everything is already in progress</p>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="clock"><div class="hm" id="hm">--:--</div><div class="dt" id="dt"></div></div>
+      <div class="nowblock">
+        <div class="lbl">Now Watching</div>
+        <div class="nowtitle" id="nowTitle">—</div>
+        <div class="nowmeta" id="nowMeta"></div>
+        <div class="cred" id="cred" hidden></div>
+        <div class="bar"><i id="bar"></i></div>
+        <div class="joined" id="joined"></div>
+        <div class="desc" id="desc" hidden></div>
+      </div>
+      <div class="next">
+        <div class="lbl">Next</div>
+        <div class="nexttitle" id="nextTitle">—</div>
+        <div class="ctrls">
+          <button id="bDown">▼ CH</button>
+          <button id="bUp">▲ CH</button>
+          <button id="bMute">MUTE</button>
+          <input class="vol" id="vol" type="range" min="0" max="100" value="85" title="Volume">
+          <button id="bFull" title="Full screen (F, or double-click the picture)">⛶ FULL</button>
+          <button id="bScroll">SCROLL: ON</button>
+          <button id="bArchive">ARCHIVE ↗</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="guide">
+    <div class="times">
+      <div class="corner" id="corner">CHANNEL</div>
+      <div class="track" id="timesTrack"><div class="inner" id="timesInner"></div></div>
+    </div>
+    <div class="rowsclip" id="rowsClip">
+      <div class="rowsmove" id="rowsMove"></div>
+      <div class="nowline" id="nowLine" hidden></div>
+      <div class="hint">↑↓ channel · ←→ guide · type a number · F = full screen · space = pause scroll</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="dial" id="dial"></div>
+<!-- cinema mode hides the side panel, so the way out lives outside it -->
+<div class="exitcine" id="exitCine">✕&nbsp; EXIT FULL SCREEN</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   DATA — baked at build time by harvest.py. No network calls at runtime
+   except the media files themselves.
+   ══════════════════════════════════════════════════════════════════ */
+const DATA = __CHANNEL_DATA__;
+
+/* ══════════════════════════════════════════════════════════════════
+   SCHEDULE ENGINE
+   The schedule is a pure function of wall-clock time. No server, no
+   state: every viewer who loads the page at the same moment sees the
+   same thing, mid-programme, exactly as broadcast television works.
+   ══════════════════════════════════════════════════════════════════ */
+const SLOT  = 1800;                          // 30 minutes
+const EPOCH = Date.UTC(2025,0,1,0,0,0)/1000; // all schedules count from here
+const IDENT = 7;                             // station ident at the top of a block
+const SPOTS = DATA.interstitials;
+
+function fnv(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){let a=seed>>>0;return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+// Roughly what share of a slot is actual programme; the rest is ad break.
+// Period television ran around 20–25% commercial load.
+const CONTENT = 0.86;
+
+/* ---------- packing items into half-hour blocks ----------
+   A six-minute cartoon does not get its own half hour — it shares one with
+   the cartoons either side of it, which is how a Saturday morning block
+   actually worked. Anything too long to share keeps a block to itself.
+
+   Filling blocks in playlist order wastes a lot of slot (a 17-minute film
+   followed by a 15-minute one leaves each stranded in its own half hour, so
+   the channel ends up 40%+ commercials). Packing longest-first and taking
+   whatever still fits gets the content share close to the target instead.  */
+function packChannel(ch){
+  const cap  = SLOT * CONTENT;
+  const mk   = (list, d) => ({items:list, content:d,
+                              slot: Math.max(SLOT, Math.ceil((d+60)/SLOT)*SLOT)});
+  const long = ch.items.filter(it => it.dur + 60 >  SLOT).map(it => mk([it], it.dur));
+  const pool = ch.items.filter(it => it.dur + 60 <= SLOT)
+                       .slice().sort((a,b) => b.dur - a.dur);
+
+  const short = [];
+  while(pool.length){
+    const cur = []; let sum = 0;
+    for(let i=0; i<pool.length; ){
+      if(sum + pool[i].dur <= cap){ sum += pool[i].dur; cur.push(pool.splice(i,1)[0]) }
+      else i++;
+    }
+    if(!cur.length){ cur.push(pool.shift()); sum = cur[0].dur }  // single oversized item
+    short.push(mk(cur, sum));
+  }
+
+  // Longest-first packing would otherwise front-load the channel, so deal the
+  // blocks back out in a fixed, seeded order.
+  const all = short.concat(long);
+  const r = rng(fnv('order:'+ch.num));
+  for(let i=all.length-1; i>0; i--){
+    const j = Math.floor(r()*(i+1));
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  return all;
+}
+
+const CH = DATA.channels.map(c=>{
+  const blocks = packChannel(c);
+  const cum=[]; let t=0;
+  for(const b of blocks){ cum.push(t); t+=b.slot }
+  return {...c, blocks, cum, cycle:t};
+});
+
+function programAt(ch, t){
+  const cyc = ch.cycle;
+  const off = t - EPOCH;
+  const e   = ((off % cyc) + cyc) % cyc;
+  const rev = Math.floor(off / cyc);           // which pass through the playlist
+  let lo = 0, hi = ch.blocks.length - 1;     // cum[] is sorted; binary search it
+  while(lo < hi){
+    const mid = (lo + hi + 1) >> 1;
+    if(e >= ch.cum[mid]) lo = mid; else hi = mid - 1;
+  }
+  const i = lo, b = ch.blocks[i];
+  const into  = e - ch.cum[i];
+  const start = t - into;
+  return {block:b, item:b.items[0], idx:i, slot:b.slot,
+          start, end:start+b.slot, into, rev};
+}
+
+function nextProgram(ch, t){ return programAt(ch, programAt(ch,t).end + 1); }
+
+/* ---------- the running order inside one block ----------
+   Every item is cut into acts of roughly a quarter hour, a break follows each
+   act, and the slot's spare time is shared out across those breaks. So a
+   feature returns from an ad break every fifteen minutes or so instead of
+   running clean and then dumping ten minutes of commercials at the end, and a
+   block of cartoons gets a short break between each one.                     */
+const planCache = new Map();
+
+function spread(weights, total){          // scale weights to sum exactly to total
+  const s = weights.reduce((a,b)=>a+b,0) || 1;
+  const out = weights.map(w => w * total / s);
+  out[out.length-1] += total - out.reduce((a,b)=>a+b,0);   // absorb float drift
+  return out;
+}
+
+function slotPlan(ch, p){
+  const key = ch.num+':'+p.rev+':'+p.idx;
+  const hit = planCache.get(key);
+  if(hit) return hit;
+
+  const r = rng(fnv(key));
+  let B = Math.max(0, p.slot - p.block.content);
+
+  // Every block opens with a station ident, paid for out of the break budget.
+  // Skipped when a block is packed too tightly to afford one.
+  const ident = B >= IDENT + 20;
+  if(ident) B -= IDENT;
+
+  // cut each item into acts
+  const segs = [];
+  for(const it of p.block.items){
+    const k = Math.min(6, Math.max(1, Math.round(it.dur / 900)));
+    const w = []; for(let i=0;i<k;i++) w.push(0.85 + 0.3*r());
+    let acc = 0;
+    for(const d of spread(w, it.dur)){ segs.push({item:it, from:acc, dur:d}); acc += d }
+  }
+  // one break after each act, lengths jittered but summing to the spare time
+  const bw = []; for(let i=0;i<segs.length;i++) bw.push(0.85 + 0.3*r());
+  const brks = spread(bw, B);
+
+  const plan = []; let t = 0;
+  if(ident){ plan.push({kind:'ident', t0:0, t1:IDENT}); t = IDENT }
+  segs.forEach((s,i)=>{
+    plan.push({kind:'show', t0:t, t1:t+s.dur, item:s.item, from:s.from});
+    t += s.dur;
+    plan.push({kind:'break', t0:t, t1:t+brks[i], seed:fnv(key+':b'+i),
+               afterItem:s.item, afterOffset:s.from+s.dur,
+               resumeItem:(segs[i+1] ? segs[i+1].item : null)});
+    t += brks[i];
+  });
+
+  if(planCache.size > 400) planCache.clear();
+  planCache.set(key, plan);
+  return plan;
+}
+
+// What is literally on screen at time t — an act, or a spot inside a break.
+function tuneAt(ch, t){
+  const p = programAt(ch, t);
+  const plan = slotPlan(ch, p);
+  let seg = null;
+  for(const s of plan){ if(p.into < s.t1){ seg = s; break } }
+  if(!seg) seg = plan[plan.length-1];
+
+  if(seg.kind === 'ident') return {kind:'ident', prog:p, seg, endsAt:seg.t1};
+  if(seg.kind === 'show' || !SPOTS.length)
+    return {kind:'show', item:seg.item || p.item,
+            offset:(seg.from||0) + (p.into - seg.t0), prog:p, seg, endsAt:seg.t1};
+
+  // `endsAt` is when *this spot* finishes, not the whole break — each spot is
+  // a separate load, so that is the boundary the prefetcher has to aim at.
+  let k = p.into - seg.t0;
+  const r = rng(seg.seed);
+  for(let g=0; g<400; g++){
+    const s = SPOTS[Math.floor(r()*SPOTS.length)];
+    if(k < s.dur)
+      return {kind:'break', item:s, offset:k, prog:p, seg,
+              endsAt: Math.min(seg.t1, p.into - k + s.dur)};
+    k -= s.dur;
+  }
+  return {kind:'break', item:SPOTS[0], offset:0, prog:p, seg, endsAt:seg.t1};
+}
+
+const mediaURL = it => 'https://archive.org/download/'+it.id+'/'+encodeURIComponent(it.file);
+const pageURL  = it => 'https://archive.org/details/'+it.id;
+
+/* ══════════════════════════════════════════════════════════════════
+   FORMATTING
+   ══════════════════════════════════════════════════════════════════ */
+const now  = () => Date.now()/1000;
+const pad  = n => String(n).padStart(2,'0');
+function clockTime(ts){
+  const d=new Date(ts*1000); let h=d.getHours(); const m=d.getMinutes();
+  const ap=h>=12?'PM':'AM'; h=h%12||12;
+  return h+':'+pad(m)+' '+ap;
+}
+function hhmm(ts){
+  const d=new Date(ts*1000); let h=d.getHours();
+  const ap=h>=12?'PM':'AM'; h=h%12||12;
+  return h+':'+pad(d.getMinutes())+' '+ap;
+}
+function mins(s){
+  s=Math.max(0,Math.round(s));
+  const h=Math.floor(s/3600), m=Math.round((s%3600)/60);
+  return h? h+'h '+m+'m' : m+'m';
+}
+function short(s){
+  s=Math.max(0,Math.round(s));
+  return s<60 ? s+'s' : mins(s);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+let chIdx    = 0;      // which channel we are tuned to
+let powered  = false;
+let scrollOn = true;
+let scrollY  = 0;
+let panX     = 0;      // horizontal guide pan, in seconds from window start
+let curKey   = null;   // media currently loaded in the <video>
+let dialBuf  = '';
+let dialTmr  = null;
+let rowEls   = [];
+let winStart = 0;
+let liveSig  = '';
+let hovering = false;  // pointer resting on the grid pauses the crawl
+let lastSeek = 0;      // throttles the drift resync
+const fails  = {};     // media key -> consecutive load failures
+const DEAD   = new Set();
+
+// `video` is whichever element is currently on air; `pre` is the other one,
+// warming the next programme. They swap.
+let video = $('vA');
+let pre   = $('vB');
+let preKey = null;        // media key currently warming in `pre`
+const LEAD = 25;          // start warming this long before the next cut
+
+function resetPre(){
+  preKey=null;
+  try{ pre.pause(); pre.removeAttribute('src'); pre.load() }catch(e){}
+}
+
+// Warm the standby element with whatever is on in LEAD seconds' time, seeked
+// to where that segment begins. Without this every cut to a commercial paid a
+// cold fetch + moov parse + seek, which measured 0.7-1.9s of black each - and
+// an ad break is several of those back to back.
+function warm(ch, t, st){
+  // Aim at the next *media boundary*, not a fixed number of seconds ahead and
+  // not the next segment. Inside an ad break each spot is its own load, so the
+  // boundary that matters is when the current spot ends — aiming at the end of
+  // the whole break would leave every spot-to-spot cut cold, which is the
+  // transition that looked worst.
+  const p=st.prog;
+  if(st.endsAt - p.into > LEAD) return;          // still too early to bother
+  const s=tuneAt(ch, p.start + st.endsAt + 0.5);
+  if(s.kind==='ident') return;
+  const key=s.item.id+'/'+s.item.file;
+  // The live key is taken from `st` rather than `curKey`: on the first pass
+  // curKey has not been assigned yet, and comparing against it would warm the
+  // programme that is already playing and then sit on it.
+  const liveKey = st.kind==='ident' ? null : st.item.id+'/'+st.item.file;
+  if(key===liveKey || key===preKey || DEAD.has(key)) return;
+  preKey=key;
+  pre.muted=true;           // the standby never makes a sound while it waits
+  pre.src=mediaURL(s.item);
+  const at=(s.kind==='show' ? (s.seg.from||0) : 0);   // where that segment starts
+  pre.addEventListener('loadedmetadata',()=>{
+    try{ pre.currentTime=at }catch(e){}
+  },{once:true});
+  pre.load();
+}
+
+/* ---------- static burst on channel change ---------- */
+(function makeNoise(){
+  const c=document.createElement('canvas'); c.width=c.height=180;
+  const x=c.getContext('2d'), img=x.createImageData(180,180), d=img.data;
+  for(let i=0;i<d.length;i+=4){const v=Math.random()*255|0; d[i]=d[i+1]=d[i+2]=v; d[i+3]=255}
+  x.putImageData(img,0,0);
+  document.documentElement.style.setProperty('--noise','url('+c.toDataURL()+')');
+})();
+function burst(){
+  const s=$('static'); s.classList.add('on');
+  setTimeout(()=>s.classList.remove('on'),150);
+}
+
+/* ---------- audio, synthesised: no files to load ---------- */
+let actx=null;
+function ac(){
+  if(!actx){ const C=window.AudioContext||window.webkitAudioContext; if(C) actx=new C() }
+  if(actx && actx.state==='suspended') actx.resume();
+  return actx;
+}
+function audible(){ return powered && !video.muted && video.volume>0.01 }
+
+// the dry thunk of a tuner moving between channels
+function clunk(){
+  const a=ac(); if(!a || !audible()) return;
+  const n=a.sampleRate*0.13, buf=a.createBuffer(1,n,a.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.4);
+  const src=a.createBufferSource(); src.buffer=buf;
+  const bp=a.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1400; bp.Q.value=0.7;
+  const g=a.createGain(); g.gain.value=0.10*video.volume;
+  src.connect(bp).connect(g).connect(a.destination); src.start();
+}
+
+// the 1kHz line-up tone that rode under a test card
+function identTone(){
+  const a=ac(); if(!a || !audible()) return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type='sine'; o.frequency.value=1000;
+  const t0=a.currentTime;
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(0.045*video.volume,t0+0.04);
+  g.gain.setValueAtTime(0.045*video.volume,t0+0.55);
+  g.gain.linearRampToValueAtTime(0,t0+0.75);
+  o.connect(g).connect(a.destination); o.start(t0); o.stop(t0+0.8);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   THE GUIDE GRID
+   ══════════════════════════════════════════════════════════════════ */
+const PPS = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pps'));
+const WINDOW_SECONDS = 6*3600;
+
+function buildGrid(){
+  winStart = Math.floor(now()/SLOT)*SLOT;      // snap to the last :00 / :30
+  const pps = PPS();
+
+  // time header
+  const ti = $('timesInner'); ti.innerHTML='';
+  for(let s=0; s<WINDOW_SECONDS; s+=SLOT){
+    const d=document.createElement('div');
+    d.className='slot'; d.style.left=(s*pps)+'px'; d.style.width=(SLOT*pps)+'px';
+    d.textContent=hhmm(winStart+s);
+    ti.appendChild(d);
+  }
+  ti.style.width=(WINDOW_SECONDS*pps)+'px';
+
+  // channel rows
+  const rm = $('rowsMove'); rm.innerHTML=''; rowEls=[];
+  // The list is repeated so the vertical crawl can wrap seamlessly. Two copies
+  // is not always enough: the crawl scrolls a whole list-height before
+  // wrapping, so we need to cover that plus a full viewport, or a gap opens at
+  // the bottom on tall windows.
+  const rowH   = parseFloat(getComputedStyle(document.documentElement)
+                   .getPropertyValue('--grid-h')) || 34;
+  const copies = Math.max(2, Math.ceil($('rowsClip').clientHeight/(rowH*CH.length)) + 1);
+  for(let copy=0; copy<copies; copy++){
+    CH.forEach((ch,i)=>{
+      const row=document.createElement('div');
+      row.className='row'; row.dataset.ch=i;
+      row.innerHTML='<div class="cn"><b>'+pad(ch.num)+'</b><span>'+ch.name+'</span></div>'+
+                    '<div class="track"><div class="inner"></div></div>';
+      const inner=row.querySelector('.inner');
+      inner.style.width=(WINDOW_SECONDS*pps)+'px';
+
+      let cur=winStart;
+      let guard=0;
+      while(cur < winStart+WINDOW_SECONDS && guard++<80){
+        const p=programAt(ch,cur);
+        // A programme already in progress at the left edge gets clipped to
+        // the window rather than hanging off it, so its title stays readable.
+        let left=(p.start-winStart)*pps, width=p.slot*pps-3;
+        if(left<0){ width+=left; left=0 }
+        if(width<8){ cur=p.end; continue }
+        const list=p.block.items, extra=list.length-1;
+        const el=document.createElement('div');
+        el.className='prog';
+        el.dataset.start=p.start;
+        el.style.left =left+'px';
+        el.style.width=width+'px';
+        const star=p.item.grade==='Excellent' ? '<i class="star">★</i>' : '';
+        el.innerHTML=star+'<span style="overflow:hidden;text-overflow:ellipsis">'+
+                     esc(p.item.title)+'</span>'+
+                     (extra ? '<em>+'+extra+'</em>'
+                            : (p.item.year?'<em>'+p.item.year+'</em>':''));
+        el.title=hhmm(p.start)+' – '+hhmm(p.end)+'\n'+
+                 list.map(it=>'· '+it.title+(it.year?' ('+it.year+')':'')+
+                              (it.grade?'  ['+it.grade+']':'')+
+                              (it.dir?'  dir. '+it.dir:'')+
+                              '  —  '+mins(it.dur)+
+                              (it.desc?'\n    '+it.desc:'')).join('\n\n');
+        inner.appendChild(el);
+        cur=p.end;
+      }
+      row.addEventListener('click',()=>tune(i,true));
+      rm.appendChild(row);
+      if(copy===0) rowEls.push(row);
+    });
+  }
+  syncPan();
+  markLive();
+}
+const esc = s => s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const trunc = (s,n) => s.length>n ? s.slice(0,n-1).trimEnd()+'…' : s;
+
+function syncPan(){
+  const pps=PPS();
+  const x=-panX*pps;
+  $('timesInner').style.transform='translateX('+x+'px)';
+  document.querySelectorAll('.row .inner').forEach(e=>e.style.transform='translateX('+x+'px)');
+  // the red "now" bar
+  const line=$('nowLine'), clip=$('rowsClip');
+  const chanW=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--chan-w'));
+  const px=chanW+(now()-winStart-panX)*pps;
+  if(px>chanW && px<clip.clientWidth){ line.hidden=false; line.style.left=px+'px' }
+  else line.hidden=true;
+}
+
+function markLive(){
+  const t=now();
+  document.querySelectorAll('.row').forEach(row=>{
+    const ch=CH[+row.dataset.ch];
+    const start=programAt(ch,t).start;
+    row.classList.toggle('on', +row.dataset.ch===chIdx);
+    row.querySelectorAll('.prog').forEach(el=>{
+      el.classList.toggle('live', +el.dataset.start===start);
+    });
+  });
+}
+
+/* ---------- vertical auto-scroll, the way Prevue did it ---------- */
+let lastFrame=performance.now();
+function frame(ts){
+  const dt=Math.min(0.25,(ts-lastFrame)/1000); lastFrame=ts;
+  if(scrollOn && !hovering && rowEls.length){
+    const rowH=rowEls[0].offsetHeight||34;
+    const loop=rowH*CH.length;
+    scrollY=(scrollY + dt*20) % loop;          // ~20px/sec, a slow crawl
+    $('rowsMove').style.transform='translateY('+(-scrollY)+'px)';
+  }
+  syncPan();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ══════════════════════════════════════════════════════════════════
+   TUNING
+   ══════════════════════════════════════════════════════════════════ */
+function tune(i, viaClick){
+  chIdx=((i%CH.length)+CH.length)%CH.length;
+  curKey=null;                 // force the player to reload
+  resetPre();                  // whatever was warming belongs to the old channel
+  burst(); clunk();
+  $('ident').hidden=true; $('lower').hidden=true;
+  try{ history.replaceState(null,'','?ch='+pad(CH[chIdx].num)) }catch(e){}
+  markLive();
+  if(viaClick && !powered) powerOn();
+  refresh(true);
+  // keep the tuned channel visible in the crawl
+  if(viaClick && rowEls.length){
+    const rowH=rowEls[0].offsetHeight||34;
+    scrollY=Math.max(0, rowH*chIdx - 2*rowH);
+  }
+}
+
+function refresh(force){
+  const ch=CH[chIdx], t=now(), st=tuneAt(ch,t), p=st.prog;
+
+  // clock
+  const d=new Date();
+  $('hm').textContent=clockTime(t);
+  $('dt').textContent=d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+
+  // Which programme the viewer is actually on. During a break that is
+  // whatever we are about to return to, not the commercial itself.
+  let cur, played;
+  if(st.kind==='ident'){
+    cur = p.block.items[0]; played = 0;
+  } else if(st.kind==='show'){
+    cur = st.item; played = st.offset;
+  } else if(st.seg.resumeItem){
+    cur = st.seg.resumeItem;
+    played = (st.seg.resumeItem === st.seg.afterItem) ? st.seg.afterOffset : 0;
+  } else {
+    cur = st.seg.afterItem; played = st.seg.afterOffset;
+  }
+
+  const bi   = p.block.items.indexOf(cur);
+  const many = p.block.items.length > 1;
+
+  $('nowTitle').textContent=cur.title;
+  $('nowMeta').textContent=[
+    'CH '+pad(ch.num)+' '+ch.name,
+    cur.year||'',
+    hhmm(p.start)+'–'+hhmm(p.end),
+    many ? (bi+1)+' OF '+p.block.items.length : ''
+  ].filter(Boolean).join('  ·  ');
+
+  // Where a curator or critic said something about this film, say it.
+  const cred=$('cred');
+  if(cur.grade || cur.dir){
+    cred.innerHTML=(cur.grade?'<b class="g'+cur.grade.replace(/\W/g,'')+'">'+
+                              esc(cur.grade.toUpperCase())+'</b>':'')+
+                   (cur.dir?'<span>dir. '+esc(cur.dir)+'</span>':'');
+    cred.hidden=false;
+  } else cred.hidden=true;
+
+  const de=$('desc');
+  if(cur.desc){
+    de.innerHTML=esc(cur.desc)+
+      (cur.desc_src==='savant' ? '<cite>— DVD Savant</cite>' : '');
+    de.hidden=false;
+  } else de.hidden=true;
+
+  $('bar').style.width=(Math.min(1,played/cur.dur)*100)+'%';
+  $('joined').textContent =
+      st.kind==='ident' ? '◉ STATION IDENTIFICATION'
+    : st.kind==='break' ? '● COMMERCIAL BREAK — BACK IN '+short(st.seg.t1 - p.into)
+    : (played>25 ? 'JOINED '+mins(played)+' IN  ·  '+mins(cur.dur-played)+' LEFT'
+                 : 'STARTING NOW');
+
+  const nx=nextProgram(ch,t);
+  $('nextTitle').textContent=hhmm(nx.start)+'  —  '+nx.item.title+
+    (nx.block.items.length>1 ? '  +'+(nx.block.items.length-1)+' more' : '');
+
+  // repaint the live highlight only when a programme actually rolls over
+  const sig=CH.map(c=>programAt(c,t).start).join(',');
+  if(sig!==liveSig){ liveSig=sig; markLive() }
+
+  // the on-screen channel bug
+  const bug=$('bug'); bug.hidden=!powered;
+  $('bugN').textContent=pad(ch.num);
+  $('bugT').innerHTML = st.kind==='break'
+      ? 'WE&rsquo;LL RETURN TO<br>'+esc(trunc(cur.title,38))
+      : esc(ch.name)+'<br>'+esc(trunc(cur.title,38));
+  bug.classList.toggle('brk', st.kind==='break');
+
+  const want='CH '+pad(ch.num)+' · '+cur.title+' — THE GUIDE';
+  if(document.title!==want) document.title=want;
+
+  if(!powered) return;
+
+  // Warm the next programme first — the seven seconds of a station ident is
+  // exactly the window we want to spend loading whatever follows it.
+  warm(ch, t, st);
+
+  // ---- station ident: the picture is ours, not Archive's ----
+  if(st.kind==='ident'){
+    $('lower').hidden=true;
+    $('identNum').textContent=pad(ch.num);
+    $('identName').textContent=ch.name;
+    $('identTag').textContent=ch.tag||'';
+    if($('ident').hidden){ $('ident').hidden=false; video.pause(); identTone() }
+    curKey='@ident';                         // force a reload when the show starts
+    return;
+  }
+  $('ident').hidden=true;
+
+  // ---- up next, in the closing minute of a block ----
+  if(p.end - t <= 60){
+    $('lowerT').textContent=nx.item.title+
+      (nx.block.items.length>1 ? '  +'+(nx.block.items.length-1)+' more' : '');
+    $('lower').hidden=false;
+  } else $('lower').hidden=true;
+
+  // ---- drive the <video> ----
+  const key=st.item.id+'/'+st.item.file;
+
+  if(DEAD.has(key)){                         // tape's broken; put up a slate
+    $('identNum').textContent=pad(ch.num);
+    $('identName').textContent='PLEASE STAND BY';
+    $('identTag').textContent='Technical difficulties';
+    $('ident').hidden=false;
+    video.pause();
+    curKey='@standby';
+    return;
+  }
+  if(key!==curKey){
+    curKey=key;
+    if(preKey===key && pre.readyState>=2){
+      // Already warmed: swap the elements instead of loading anything.
+      const old=video;
+      video=pre; pre=old;
+      video.muted=old.muted; video.volume=old.volume;
+      video.classList.add('live'); old.classList.remove('live');
+      old.pause();
+      preKey=null;
+      // It was parked at this segment's start when it was warmed, so normally
+      // no seek is needed — and seeking anyway costs a visible beat.
+      if(Math.abs(video.currentTime - st.offset) > 0.4){
+        try{ video.currentTime=st.offset }catch(e){}
+      }
+      playSafe();
+      resetPre();
+    } else {
+      video.src=mediaURL(st.item);
+      video.addEventListener('loadedmetadata',()=>{
+        try{ video.currentTime=st.offset }catch(e){}
+        playSafe();
+      },{once:true});
+      video.load();
+    }
+  } else if(!force && video.readyState>1){
+    // Live TV never waits for you: if buffering made us fall behind real time,
+    // jump forward to where the broadcast actually is.
+    //
+    // But never re-seek while a seek is still in flight. On a two-gigabyte
+    // file a seek takes seconds, during which currentTime still reads behind —
+    // so an unguarded check re-seeks every tick, thrashes the connection and
+    // eventually errors the element out.
+    const now_=performance.now();
+    if(!video.seeking && now_-lastSeek>8000 &&
+       Math.abs(st.offset - video.currentTime)>6){
+      lastSeek=now_;
+      try{ video.currentTime=st.offset }catch(e){}
+    }
+    if(video.paused && !video.seeking) playSafe();
+  }
+}
+
+// Browsers refuse audible autoplay in some contexts; fall back to muted
+// rather than leaving a black screen, and let the button say so.
+function playSafe(){
+  const p=video.play();
+  if(p && p.catch) p.catch(()=>{ video.muted=true; syncMute(); video.play().catch(()=>{}) });
+}
+
+function powerOn(){
+  if(powered) return;
+  powered=true;
+  $('power').style.display='none';
+  video.muted=false; video.volume=(+$('vol').value)/100;
+  curKey=null;
+  ac();                      // the power-on click is our gesture to open audio
+  burst(); clunk();
+  refresh(true);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CONTROLS
+   ══════════════════════════════════════════════════════════════════ */
+$('power').addEventListener('click',e=>{ e.stopPropagation(); powerOn() });
+/* ---------- full screen ----------
+   Three tiers, because the Fullscreen API is not always available. Embedded
+   webviews can reject requestFullscreen() outright with "Permissions check
+   failed" even on a genuine user gesture, and iOS Safari will not fullscreen
+   a container at all. So: real fullscreen if we can get it, the video
+   element's own fullscreen if not, and failing both a cinema mode that just
+   hides the guide and lets the picture fill the window. That last one always
+   works, which is the point of having it.                                   */
+let cinema=false;
+function fsEl(){ return document.fullscreenElement || document.webkitFullscreenElement }
+function isFull(){ return !!fsEl() || cinema }
+
+function setCinema(on){
+  cinema=on;
+  document.body.classList.toggle('cinema',on);
+  syncFull();
+  setTimeout(buildGrid,80);
+}
+function fallbackFull(){
+  // Only reach for the video element's own fullscreen where a container
+  // genuinely cannot be fullscreened — that is iOS. Desktop Chrome also
+  // exposes webkitEnterFullscreen, but in an embedded webview it is a silent
+  // no-op, and trusting it leaves the button doing nothing at all.
+  const box=$('screen');
+  const canContainer = !!(box.requestFullscreen || box.webkitRequestFullscreen);
+  if(!canContainer && video.webkitEnterFullscreen){
+    try{ video.webkitEnterFullscreen() }catch(e){}
+    setTimeout(()=>{
+      if(!fsEl() && !video.webkitDisplayingFullscreen) setCinema(true);
+    },400);
+    return;
+  }
+  setCinema(true);
+}
+function toggleFull(){
+  if(fsEl()){
+    const exit=document.exitFullscreen||document.webkitExitFullscreen;
+    if(exit) exit.call(document);
+    return;
+  }
+  if(cinema){ setCinema(false); return }
+
+  const box=$('screen');
+  const req=box.requestFullscreen||box.webkitRequestFullscreen;
+  if(!req){ fallbackFull(); return }
+  try{
+    const p=req.call(box);
+    if(p && p.catch) p.catch(()=>{});      // handled by the check below
+  }catch(e){ /* ditto */ }
+  // Check the outcome rather than trusting the call. An embedded webview may
+  // reject, or *resolve* the promise, or fire no event at all, and still not
+  // be in fullscreen — so the only reliable signal is whether it actually
+  // happened.
+  setTimeout(()=>{ if(!fsEl() && !cinema) fallbackFull() },350);
+}
+function syncFull(){ $('bFull').textContent = isFull() ? '⛶ EXIT' : '⛶ FULL' }
+// Rebuild the grid after leaving full screen — it was laid out against a
+// collapsed container while hidden. Deferred so the layout has settled.
+['fullscreenchange','webkitfullscreenchange'].forEach(e=>
+  document.addEventListener(e,()=>{ syncFull(); setTimeout(buildGrid,80) }));
+if(!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) $('bFull').hidden=true;
+$('bFull').addEventListener('click',e=>{ e.stopPropagation(); toggleFull() });
+$('exitCine').addEventListener('click',e=>{ e.stopPropagation(); setCinema(false) });
+
+// Single click mutes, double click goes full screen — hold the mute toggle
+// briefly so a double click does not flip it on the way past.
+let clickHold=null;
+$('screen').addEventListener('click',()=>{
+  if(!powered || clickHold) return;
+  clickHold=setTimeout(()=>{ clickHold=null; video.muted=!video.muted; syncMute() },230);
+});
+$('screen').addEventListener('dblclick',()=>{
+  clearTimeout(clickHold); clickHold=null;
+  if(powered) toggleFull();
+});
+$('bUp')  .addEventListener('click',e=>{e.stopPropagation();tune(chIdx-1,true)});
+$('bDown').addEventListener('click',e=>{e.stopPropagation();tune(chIdx+1,true)});
+$('bMute').addEventListener('click',e=>{e.stopPropagation();video.muted=!video.muted;syncMute()});
+$('vol').addEventListener('input',e=>{
+  e.stopPropagation();
+  video.volume=+e.target.value/100;
+  if(video.volume>0 && video.muted){ video.muted=false; syncMute() }
+});
+$('bScroll').addEventListener('click',e=>{e.stopPropagation();scrollOn=!scrollOn;$('bScroll').textContent='SCROLL: '+(scrollOn?'ON':'OFF')});
+$('bArchive').addEventListener('click',e=>{
+  e.stopPropagation();
+  const st=tuneAt(CH[chIdx],now());          // link what is on, not the block
+  window.open(pageURL(st.kind==='show' ? st.item
+                      : (st.seg.resumeItem||st.seg.afterItem)),'_blank','noopener');
+});
+function syncMute(){ $('bMute').textContent=video.muted?'UNMUTE':'MUTE' }
+
+// pause the crawl while the pointer is in the grid, like a guide you lean into
+$('rowsClip').addEventListener('mouseenter',()=>hovering=true);
+$('rowsClip').addEventListener('mouseleave',()=>hovering=false);
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp')   { e.preventDefault(); tune(chIdx-1,true) }
+  else if(e.key==='ArrowDown'){ e.preventDefault(); tune(chIdx+1,true) }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); panX=Math.min(WINDOW_SECONDS-SLOT,panX+SLOT) }
+  else if(e.key==='ArrowLeft') { e.preventDefault(); panX=Math.max(0,panX-SLOT) }
+  else if(e.key===' ')    { e.preventDefault(); scrollOn=!scrollOn; $('bScroll').textContent='SCROLL: '+(scrollOn?'ON':'OFF') }
+  else if(e.key==='m')    { video.muted=!video.muted; syncMute() }
+  else if(e.key==='f')    { e.preventDefault(); if(powered) toggleFull() }
+  // real fullscreen handles its own Escape; cinema mode has to do it here
+  else if(e.key==='Escape' && cinema){ e.preventDefault(); setCinema(false) }
+  else if(/^[0-9]$/.test(e.key)){
+    dialBuf=(dialBuf+e.key).slice(-2);
+    const dial=$('dial'); dial.textContent=dialBuf; dial.classList.add('on');
+    clearTimeout(dialTmr);
+    dialTmr=setTimeout(()=>{
+      dial.classList.remove('on');
+      const n=parseInt(dialBuf,10);
+      const i=CH.findIndex(c=>c.num===n);
+      if(i>=0) tune(i,true);
+      dialBuf='';
+    },1100);
+  }
+});
+
+let rz;
+addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(buildGrid,220) });
+
+/* ══════════════════════════════════════════════════════════════════
+   GO
+   ══════════════════════════════════════════════════════════════════ */
+// ?ch=04 tunes straight to a channel; the schedule is global, so a link like
+// that lands someone on exactly what you were watching.
+const askedFor = parseInt((location.search.match(/[?&]ch=(\d+)/)||[])[1], 10);
+const asked    = CH.findIndex(c=>c.num===askedFor);
+chIdx = asked>=0 ? asked
+                 : Math.floor(Math.random()*CH.length);  // never channel 1 first
+buildGrid();
+refresh(true);
+setInterval(()=>refresh(false),1000);
+// roll the guide window forward, but never yank it out from under a reader
+setInterval(()=>{ if(!hovering){ panX=0; buildGrid() } }, 10*60*1000);
+// Listeners go on both elements; which one is on air changes as they swap.
+[$('vA'),$('vB')].forEach(el=>{
+  el.addEventListener('ended',e=>{
+    if(e.target===video){ curKey=null; refresh(true) }
+  });
+  // A failed tape does not move you to another channel — a station would put
+  // up a slate and stay where it is. Retry the same programme once, then
+  // stand by until the schedule moves on by itself.
+  el.addEventListener('error',e=>{
+    if(e.target!==video){                 // the standby failed; just drop it
+      if(e.target===pre && preKey) preKey=null;
+      return;
+    }
+    const k=curKey;
+    if(!k || k==='@ident' || k==='@standby') return;
+    fails[k]=(fails[k]||0)+1;
+    if(fails[k]>=2) DEAD.add(k);
+    curKey=null;
+    setTimeout(()=>refresh(true), 900);
+  });
+});
+</script>
+</body>
+</html>
