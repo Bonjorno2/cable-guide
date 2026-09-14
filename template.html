@@ -45,6 +45,19 @@
     object-fit:contain;background:#000;opacity:0;z-index:1}
   .screen video.tv.live{opacity:1;z-index:2}
 
+  /* A tap target on the picture itself. Double-tap-to-fullscreen is not a
+     gesture anyone tries on a phone, and the side panel's buttons are far
+     too small, so touch devices get an explicit one. */
+  .fsbtn{
+    display:none; position:absolute; right:10px; bottom:10px; z-index:7;
+    width:48px; height:48px; align-items:center; justify-content:center;
+    font-size:22px; line-height:1; color:#fff; background:rgba(6,4,40,.62);
+    border:1px solid rgba(255,255,255,.34); border-radius:5px;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  @media (hover:none){ body.on .fsbtn{display:flex} }
+  body.cinema .fsbtn{display:none}          /* exitcine is the way out there */
+
   .bug{
     position:absolute; left:14px; bottom:12px; z-index:4;
     display:flex; align-items:center; gap:9px;
@@ -246,10 +259,27 @@
   }
   .dial.on{opacity:1}
 
+  /* Touch devices: 10px type in 6px padding is a ~22px target, half the 44px
+     a fingertip needs. Keyed off hover, not width, so a small desktop window
+     keeps the compact panel. */
+  @media (hover:none){
+    .ctrls{gap:8px}
+    .ctrls button{font-size:13px;letter-spacing:.1em;padding:0 15px;min-height:44px}
+    .vol{width:100px;height:38px}
+    .exitcine{font-size:13px;padding:13px 18px;top:12px;right:12px}
+  }
+
   @media (max-width:860px){
     .top{flex-basis:42%;flex-direction:column}
     .side{flex:0 0 auto;flex-direction:row;flex-wrap:wrap;gap:8px 14px;padding:9px 12px;align-items:center}
-    .side .next,.side .bar,.side .joined,.side .desc{display:none}
+    /* hide the "Next" preview text, but NOT .ctrls, which lives inside it */
+    .side .bar,.side .joined,.side .desc{display:none}
+    .side .next .lbl,.side .next .nexttitle{display:none}
+    /* .next is a flex item, so min-width:auto stops it shrinking below its
+       content -- .ctrls then measured 649px in a 375px viewport and the last
+       three buttons were clipped by .side's overflow:hidden. Give it the whole
+       row and let the buttons wrap onto a second line. */
+    .side .next{flex:1 1 100%;min-width:0}
     .clock{border:0;padding:0}
     .nowtitle{font-size:13px;-webkit-line-clamp:2}
     :root{--chan-w:118px;--pps:0.0777}
@@ -282,6 +312,7 @@
 
       <div class="lower" id="lower" hidden><b>UP NEXT</b><span id="lowerT"></span></div>
       <div class="bug" id="bug" hidden><div class="n" id="bugN">02</div><div class="t" id="bugT"></div></div>
+      <div class="fsbtn" id="fsBtn" role="button" tabindex="0" aria-label="Full screen">⛶</div>
       <div class="powerwrap" id="power">
         <h1>THE&nbsp;GUIDE</h1>
         <p>Continuous programming from the Internet Archive</p>
@@ -974,11 +1005,13 @@ function powerOn(){
   if(powered) return;
   powered=true;
   $('power').style.display='none';
+  document.body.classList.add('on');     // reveals the on-picture controls
   video.muted=false; video.volume=(+$('vol').value)/100;
   curKey=null;
   ac();                      // the power-on click is our gesture to open audio
   burst(); clunk();
   refresh(true);
+  onOrient();                // already sideways? go straight to full screen
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1040,14 +1073,36 @@ function toggleFull(){
   // happened.
   setTimeout(()=>{ if(!fsEl() && !cinema) fallbackFull() },350);
 }
-function syncFull(){ $('bFull').textContent = isFull() ? '⛶ EXIT' : '⛶ FULL' }
+function syncFull(){
+  $('bFull').textContent = isFull() ? '⛶ EXIT' : '⛶ FULL';
+  $('fsBtn').textContent = isFull() ? '✕' : '⛶';
+}
 // Rebuild the grid after leaving full screen — it was laid out against a
 // collapsed container while hidden. Deferred so the layout has settled.
 ['fullscreenchange','webkitfullscreenchange'].forEach(e=>
   document.addEventListener(e,()=>{ syncFull(); setTimeout(buildGrid,80) }));
-if(!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) $('bFull').hidden=true;
+// Do NOT hide the button when fullscreenEnabled is false. That flag is false
+// on iPhone Safari, which is precisely where cinema mode is the only way to
+// fill the screen -- hiding it there left the phone with no way in at all.
 $('bFull').addEventListener('click',e=>{ e.stopPropagation(); toggleFull() });
-$('exitCine').addEventListener('click',e=>{ e.stopPropagation(); setCinema(false) });
+$('exitCine').addEventListener('click',e=>{ e.stopPropagation(); autoCine=false; setCinema(false) });
+$('fsBtn').addEventListener('click',e=>{ e.stopPropagation(); autoCine=false; toggleFull() });
+
+/* ---------- turn the phone sideways to watch ----------
+   Rotation is not a user gesture, so requestFullscreen() would be rejected;
+   cinema mode is CSS only and always works. Only auto-entered cinema is
+   auto-left, so rotating back does not yank someone out of a mode they
+   chose themselves. */
+let autoCine=false;
+const portraitMQ = matchMedia('(orientation:portrait)');
+const touchMQ    = matchMedia('(hover:none)');
+function onOrient(){
+  if(!touchMQ.matches) return;
+  const landscape = !portraitMQ.matches;
+  if(landscape && powered && !cinema && !fsEl()){ autoCine=true; setCinema(true) }
+  else if(!landscape && cinema && autoCine){ autoCine=false; setCinema(false) }
+}
+portraitMQ.addEventListener('change', onOrient);
 
 // Single click mutes, double click goes full screen — hold the mute toggle
 // briefly so a double click does not flip it on the way past.
