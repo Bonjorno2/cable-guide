@@ -850,15 +850,20 @@ function buildGrid(){
 const esc = s => s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const trunc = (s,n) => s.length>n ? s.slice(0,n-1).trimEnd()+'…' : s;
 
-/* Why a film is on CH 12 at all. The other two signals the curation carries
-   already show themselves — the grade is a badge and the shelf is the channel
-   — but "the people who saved these films saved this one too" is invisible
-   unless the listing says it, and on that channel it is the whole argument.
-   Half of CH 12 was found that way and by nothing else. */
+/* Why a programme is on CH 12 or CH 11 at all. The other signals the curation
+   carries already show themselves — the grade is a badge and the shelf is the
+   channel — but "the people who saved these films saved this one too" is
+   invisible unless the listing says it, and on both of those channels it is the
+   whole argument. Half of CH 12 was found that way and by nothing else, and
+   every pairing on CH 11 rests on it: without the line, a half-hour sitcom in
+   front of All About Eve is an unexplained scheduling accident. */
 function vouch(it){
   if(it.kind==='graph') return it.reach ? 'saved beside '+it.reach+' films here' : '';
   if(it.kind==='triple') return 'endorsed three times';
   if(it.kind==='double') return 'endorsed twice';
+  if(it.kind==='feature') return it.with ? 'saved by the people who saved '+it.with : '';
+  if(it.kind==='leadin')
+    return it.shared ? it.shared+' collectors saved this and tonight’s feature' : '';
   return '';
 }
 

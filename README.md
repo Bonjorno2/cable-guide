@@ -1,6 +1,6 @@
 # THE GUIDE
 
-A cable television guide that is always already in progress. 49 channels
+A cable television guide that is always already in progress. 50 channels
 built from curated Internet Archive collections, running on a real schedule.
 Tune in at 8:17 and you are seventeen minutes into the movie.
 
@@ -165,9 +165,9 @@ Three details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,533 of 4,101 slots (86%) carry a listing description** — 3,697 of those
-slots are distinct programmes, the rest being CH 01 and CH 12 replaying the
-dial. From two sources, best first:
+**3,609 of 4,179 slots (86%) carry a listing description** — 3,697 of those
+slots are distinct programmes, the rest being CH 01, CH 11 and CH 12 replaying
+the dial. From two sources, best first:
 
 1. **Glenn Erickson's own prose**, for the 324 films ia-curation matched to a
    DVD Savant review. A critic writing about the film beats anything an
@@ -229,6 +229,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `walk.py` | Builds CH 12 COLLECTORS — imports ia-curation's programmed channel and writes its running order out as fixed blocks; no network calls |
 | `drivein.py` | Re-sculpts CH 16 SHOCKER — sorts the drive-in's 50 nights back into broadcast order, retitles them from ia-curation's untruncated titles, and reads each night's bill out of its blurb |
 | `test_drivein.py` | 21 cases for `drivein.bill()` and `retitle()`; every one a real description off the shelf |
+| `evening.py` | Builds CH 11 THE EVENING — pairs CH 52's half-hours with graded features over the cross-medium co-favourite graph; no network calls |
 | `suggest.py` | Builds the seven channels behind the ★ SUGGESTED toggle — six split out of CH 15, one drawn from CH 52; no network calls |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
@@ -243,6 +244,7 @@ python walk.py           # CH 12 COLLECTORS, from ia-curation's channel.json
 python drivein.py        # CH 16 SHOCKER back into broadcast order (~1 min)
 python describe.py       # listing descriptions (skips items that have one)
 python daypart.py        # CH 01 THE NETWORK; needs the genre channels to exist
+python evening.py        # CH 11 THE EVENING; needs CH 52 and the graded films
 python suggest.py        # the ★ SUGGESTED lineup; must run last before build
 python build.py          # regenerate index.html
 ```
@@ -314,16 +316,17 @@ static host, or open it directly.
 
 ## Channels
 
-**49 channels, 3,697 programmes filling 4,101 slots** — CH 01 replays the dial
-on a clock and CH 12 re-programmes a corner of it, so they are the difference
-between the two. Most channels run for days before they repeat; DOUBLE and
-SAVANT run for over a week.
+**50 channels, 3,697 programmes filling 4,179 slots** — CH 01 replays the dial
+on a clock, CH 12 re-programmes a corner of it and CH 11 pairs two of its
+channels off against each other, so the three of them are the difference
+between the two numbers. Most channels run for days before they repeat; DOUBLE
+and SAVANT run for over a week.
 
 Channels marked ● are curator shelves from ia-curation — a real point of view,
 not a query. CH 01 is marked ◑: the dayparted channel, and the only one that
-runs on your clock rather than everyone's. CH 12 and CH 16 are marked ◆: they
-arrive already programmed, in an order that means something, and both ship
-their blocks so the scheduler cannot shuffle them. CH 52 is
+runs on your clock rather than everyone's. CH 11, CH 12 and CH 16 are marked ◆:
+they arrive already programmed, in an order that means something, and all three
+ship their blocks so the scheduler cannot shuffle them. CH 52 is
 marked †: a hand-written list of public-domain series,
 because no query can tell a free sitcom from a bootlegged one.
 
@@ -336,6 +339,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 07 | NEWSREEL | Universal Newsreels | 201 | 24h |
 | 08 | A/V CLUB | Classroom & training films | 180 | 59h |
 | 09 | THE VAULT | Television past | 150 | 111h |
+| 11 | **THE EVENING** ◆ | **Two half-hours and the feature, one audience** | 78 | 76h |
 | 12 | **COLLECTORS** ◆ | **Gothic to giallo, in a running order** | 40 | 73h |
 | 13 | HOME MOVIES | Strangers' amateur film | 140 | 36h |
 | 14 | MISSION CTRL | NASA film & mission footage | 129 | 46h |
@@ -385,8 +389,8 @@ cable box looked like.
 `curated.py` keeps a global set of claimed identifiers and titles, so no
 programme appears on two harvested channels. That matters here: half a dozen
 shelves are noir, and without it CH 19, 20, 33, 42 and 43 would be the same
-twenty films. The exceptions are the two channels that are *views* over the
-dial rather than harvests of it — CH 01 and CH 12 — and both say so.
+twenty films. The exceptions are the three channels that are *views* over the
+dial rather than harvests of it — CH 01, CH 11 and CH 12 — and all three say so.
 
 ### CH 12 COLLECTORS — a channel that was programmed by a graph
 
@@ -470,6 +474,89 @@ still earning its keep.
 It is not in the ★ SUGGESTED lineup. That service is the double-endorsed films
 split six ways plus the comedy, and this channel overlaps two of those six
 while answering a different question.
+
+### CH 11 THE EVENING — a channel built out of somebody else's bug
+
+Every other channel on this dial is one medium. The film channels are films,
+CH 52 is television, and nothing joins them: the two catalogues are separate
+scrapes with separate curation stories and no shared key. CH 11 is both, and
+what joins them is the only signal archive.org has that crosses the boundary —
+**the same person favourited both**.
+
+That signal is already in ia-curation, written down as a *defect*. Under what
+`neighbours.py` does badly, its README says:
+
+> The TV catalog leaks in. `catalog_tv.jsonl` is loaded so TV items can be
+> seeded, but a collector who saves both films and sitcoms drags one medium into
+> the other's neighbourhood: *One Foot in the Grave* surfaces under a 1928 Garbo
+> silent on a single shared collector.
+
+For a film recommender that is noise, and it is right to call it noise. For an
+evening's viewing it is the whole question — *which half-hour goes in front of
+this picture?* — and nothing else anywhere answers it. `evening.py` reads the
+leak as the signal, and it is the only thing in either project that does.
+
+A night is what an independent station actually ran:
+
+```
+ 8:00  half-hour            the film's strongest pairing
+ 8:30  half-hour            its second
+ 9:00  the feature          graded Excellent or Very Good by Glenn Erickson
+```
+
+26 nights, 76 hours, 1932–1974, 18 of the 26 features graded Excellent, and at
+13% commercials it is one of the better-behaved channels on the dial. The blocks
+are prescribed for CH 12's reason: `packChannel()` would shuffle the three apart
+and the pairing — the only claim the channel makes — would be gone.
+
+**Three of the four corrections are neighbours.py's**, because it is the same
+graph failing the same ways: hoarder damping (a voter weighs `1/log(2+picks)`,
+and past 400 picks is dropped), a support floor, and a size floor on the series.
+The floor is 3 here rather than 2, because the Garbo edge quoted above is exactly
+one person and this is the thin end of a graph that was already thin.
+
+**The fourth is new, and without it there is no channel.** `neighbours.py`
+penalises the *candidate's* popularity, which is enough when both ends are
+films. Here one end is a series drawn from a list of fifteen, and on shared
+collectors alone **The Abbott and Costello Show takes 92 of the 159 pairings** —
+not because it belongs in front of 92 films but because it is one item with 536
+collectors while every other series has 54 to 397. The bigger shelf wins every
+comparison it is in, and nine series divide the whole channel between them.
+Normalising by *both* ends — a weighted cosine rather than a weighted count —
+takes it to 59 of 159 across eleven series, and puts
+
+| film | | grade | goes under | shared |
+|---|---|---|---|---|
+| My Man Godfrey | 1936 | Excellent | **Topper** | 25 |
+| I Wake Up Screaming | 1941 | Very Good | The Jack Benny Program | 17 |
+| The Day the Earth Stood Still | 1951 | Excellent | The Abbott and Costello Show | 54 |
+| Invasion of the Body Snatchers | 1956 | Excellent | The Beverly Hillbillies | 19 |
+
+at the top of it. *My Man Godfrey* under *Topper* scores 0.054 against 0.037 for
+the next pairing down, which is the largest gap on the page: screwball under
+screwball, a ghost comedy beneath the ghost comedy that was itself a 1937
+screwball picture — and not one subject tag involved anywhere, only the people.
+
+Cosine fixes the ranking and not the *distribution*, so a series carries at most
+`CAP` nights and the night goes to whoever is next. That is CH 52's lesson almost
+word for word: uncapped, this is the Abbott and Costello channel with features
+attached. Nights are then dealt in a seeded order with no series adjacent to
+itself, so leaving it on does not give you three Topper evenings in a row.
+
+Nothing here is fetched. Both ends were resolved long ago — 258 graded features
+are already on the dial, 256 of them on CH 34 or CH 15, with their files,
+runtimes and Erickson's prose attached, and 159 of the 258 find a pairing. The
+half-hours are CH 52's, which is the one part of this that could not be derived
+from anything. `evening.py` only says which of them go
+together, which makes CH 11 a view over the dial like CH 01 and CH 12, and
+exempt from `curated.py`'s claimed-identifier rule for the same reason: a view
+is supposed to replay the dial. It adds **0 new programmes and 78 slots**.
+
+One thing it cannot do anything about: `CAP` bounds the nights a series is
+*picked* for, not the episodes CH 52 actually holds of it. Abbott and Costello is
+a single item there and The Life of Riley is two, so the supply runs out before
+the cap does and both carry far fewer nights than their pairings won. The fix is
+upstream in `sitcom.py`, not here.
 
 ### CH 16 SHOCKER — a channel that was programmed by a person
 
