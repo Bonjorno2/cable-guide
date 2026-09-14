@@ -466,9 +466,25 @@ function packChannel(ch){
   return all;
 }
 
+/* CH 01 arrives with its blocks already decided. packChannel() optimises for
+   content share, which is the right goal everywhere except here: a daypart
+   boundary has to land on a half-hour or "cartoons at eight" is a lie, so
+   daypart.py fills each window to an exact number of slots and the result is
+   used as written. `blocks` is [itemCount, slots, partIndex] against the flat
+   item list. */
+function prescribed(ch){
+  const out = []; let k = 0;
+  for(const [n, slots, p] of ch.blocks){
+    const items = ch.items.slice(k, k + n); k += n;
+    out.push({items, content: items.reduce((s,i)=>s+i.dur, 0),
+              slot: slots * SLOT, part: ch.parts[p]});
+  }
+  return out;
+}
+
 function buildLineup(list){
   return list.map(c=>{
-    const blocks = packChannel(c);
+    const blocks = c.daypart ? prescribed(c) : packChannel(c);
     const cum=[]; let t=0;
     for(const b of blocks){ cum.push(t); t+=b.slot }
     return {...c, blocks, cum, cycle:t};
@@ -482,9 +498,21 @@ const PICKS = (DATA.suggested && DATA.suggested.length)
                 ? buildLineup(DATA.suggested) : null;
 let CH = MAIN;
 
+/* Seconds east of UTC at instant t. Read per-instant rather than once, so a
+   dayparted channel stays on local time across a DST change the way a real
+   station does, instead of sliding an hour every spring. */
+function tzShift(t){ return -new Date(t*1000).getTimezoneOffset()*60 }
+
+/* EPOCH is UTC midnight and every other channel counts from it, which makes
+   the schedule identical for every viewer on earth. A dayparted channel
+   cannot have that and be dayparted: 8am UTC is 3am in New York, so globally
+   synced cartoons are cartoons in the middle of the night. Shifting by the
+   viewer's offset buys the clock at the cost of the global part -- everyone
+   in a timezone still sees the same frame, which is what a network feed
+   actually was. See the README; this is the one deliberate exception. */
 function programAt(ch, t){
   const cyc = ch.cycle;
-  const off = t - EPOCH;
+  const off = t - EPOCH + (ch.daypart ? tzShift(t) : 0);
   const e   = ((off % cyc) + cyc) % cyc;
   const rev = Math.floor(off / cyc);           // which pass through the playlist
   let lo = 0, hi = ch.blocks.length - 1;     // cum[] is sorted; binary search it
@@ -912,6 +940,7 @@ function refresh(force){
   $('nowTitle').textContent=cur.title;
   $('nowMeta').textContent=[
     'CH '+pad(ch.num)+' '+ch.name,
+    p.block.part||'',            // the daypart, on the one channel that has them
     cur.year||'',
     hhmm(p.start)+'–'+hhmm(p.end),
     many ? (bi+1)+' OF '+p.block.items.length : ''

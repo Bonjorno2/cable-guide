@@ -50,7 +50,15 @@ print(f"index.html  ({len(out)/1024:.0f} KB)")
 print(f"{len(data['channels'])} channels, {len(data['interstitials'])} fill spots\n")
 print(f"  {'':22}{'items':>6}{'blocks':>8}{'loop':>8}{'ads':>7}")
 for c in data["channels"]:
-    blocks = pack(c["items"])
+    if c.get("daypart"):
+        # Blocks were decided by daypart.py; repacking them here would report
+        # a schedule the site does not run.
+        k, blocks = 0, []
+        for n, slots, _ in c["blocks"]:
+            grp = c["items"][k:k + n]; k += n
+            blocks.append((grp, sum(i["dur"] for i in grp), slots * SLOT))
+    else:
+        blocks = pack(c["items"])
     cycle = sum(b[2] for b in blocks)
     ad = 1 - sum(b[1] for b in blocks) / cycle
     print(f"  CH {c['num']:02d} {c['name']:<16}{len(c['items']):>6}{len(blocks):>8}"

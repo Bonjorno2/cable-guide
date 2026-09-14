@@ -1,6 +1,6 @@
 # THE GUIDE
 
-A cable television guide that is always already in progress. 47 channels
+A cable television guide that is always already in progress. 48 channels
 built from curated Internet Archive collections, running on a real schedule.
 Tune in at 8:17 and you are seventeen minutes into the movie.
 
@@ -18,6 +18,15 @@ elapsed = (now - EPOCH) mod channel_cycle_length
 That single decision is what makes it feel like television instead of a video
 player. You cannot pause it, you cannot pick a start point, and if you look
 away you miss something.
+
+**One channel breaks the "every viewer" half of that on purpose.** CH 01 THE
+NETWORK is dayparted — cartoons in the morning, the late movie at ten — and a
+daypart is meaningless without a local clock, because 8am UTC is 3am in New
+York. It is shifted by the viewer's UTC offset, so everyone in a timezone sees
+the same frame and the dial as a whole is a pure function of *(time, zone)*
+rather than time alone. Which is what a network feed was: the reason American
+television had an Eastern and a Pacific feed is this exact problem. Every
+other channel remains globally identical.
 
 ## How a schedule is built
 
@@ -135,8 +144,9 @@ Two details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,137 of 3,695 programmes (84%) carry a listing description**, from two
-sources, best first:
+**3,445 of 4,061 slots (84%) carry a listing description** — 3,695 of those
+slots are distinct programmes, the rest being CH 01 replaying the dial. From
+two sources, best first:
 
 1. **Glenn Erickson's own prose**, for the 324 films ia-curation matched to a
    DVD Savant review. A critic writing about the film beats anything an
@@ -192,6 +202,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `describe.py` | Adds a listing description to every programme (`--dry`, `--force`, `--repolish`) |
 | `harvest.py` | Queries the Archive.org search + metadata APIs, picks a browser-playable MP4 derivative per item, reads exact per-file durations, writes `channels.json` |
 | `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
+| `daypart.py` | Builds CH 01 THE NETWORK — re-deals existing items into a week that runs to a station's day; no network calls |
 | `suggest.py` | Splits CH 15 into the six themed channels behind the ★ SUGGESTED toggle; no network calls |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
@@ -203,6 +214,7 @@ python harvest.py        # collection-based channels (~45 min, API-throttled)
 python curated.py        # curator/critic channels from ia-curation (~5 min)
 python sitcom.py         # CH 52 only, merged in place (~1 min)
 python describe.py       # listing descriptions (skips items that have one)
+python daypart.py        # CH 01 THE NETWORK; needs the genre channels to exist
 python suggest.py        # the ★ SUGGESTED lineup; must run last before build
 python build.py          # regenerate index.html
 ```
@@ -249,15 +261,19 @@ static host, or open it directly.
 
 ## Channels
 
-**47 channels, 3,695 programmes.** Most channels run for days before they
-repeat; DOUBLE and SAVANT run for over a week.
+**48 channels, 3,695 programmes filling 4,061 slots** — CH 01 replays the dial
+on a clock, so it is the difference between the two. Most channels run for
+days before they repeat; DOUBLE and SAVANT run for over a week.
 
 Channels marked ● are curator shelves from ia-curation — a real point of view,
-not a query. CH 52 is marked †: a hand-written list of public-domain series,
+not a query. CH 01 is marked ◑: the dayparted channel, and the only one that
+runs on your clock rather than everyone's. CH 52 is marked †: a hand-written
+list of public-domain series,
 because no query can tell a free sitcom from a bootlegged one.
 
 | CH | Name | What it is | Items | Loops |
 |---|---|---|---|---|
+| 01 | THE NETWORK ◑ | One station, all day — dayparted, local clock | 366 | 168h |
 | 02 | PRELINGER | Ephemeral & industrial film | 199 | 55h |
 | 03 | SATURDAY AM | Classic theatrical cartoons | 240 | 36h |
 | 06 | CHRONICLES | The Computer Chronicles | 200 | 125h |
@@ -312,6 +328,49 @@ cable box looked like.
 `curated.py` keeps a global set of claimed identifiers and titles, so no
 programme appears on two channels. That matters here: half a dozen shelves are
 noir, and without it CH 19, 20, 33, 42 and 43 would be the same twenty films.
+
+### CH 01 THE NETWORK — the one channel with a clock
+
+Every other channel is a genre that runs the same way at four in the afternoon
+as at four in the morning. A real station was not like that, and the shape of
+its day is most of what separates a schedule from a playlist. CH 01 is a
+*view* over the dial rather than new material — the same items, re-dealt into
+a week that runs to a station's day:
+
+| | | from |
+|---|---|---|
+| 00–06 | AFTER MIDNIGHT | CHILLER, BAD MOVIE, SERIALS, NOIR ALLEY |
+| 06–08 | SIGN-ON | NEWSREEL, PRELINGER, MISSION CTRL |
+| 08–12 | MORNING | SATURDAY AM, LLOYD & CO, TRICK FILMS |
+| 12–16 | DAYTIME | A/V CLUB, PRELINGER, HOME MOVIES |
+| 16–18 | AFTER SCHOOL | SATURDAY AM, SHORT SUBJECTS, CHAPLIN |
+| 18–19 | EVENING NEWS | NEWSREEL, PRELINGER |
+| 19–20 | EARLY EVENING | LAUGH TRACK, THE VAULT |
+| 20–22 | PRIME TIME | DOUBLE, SAVANT |
+| 22–24 | LATE NIGHT | NOIR, SIODMAK, GRAHAME |
+
+Three constraints make it work, and two of them were learned by getting them
+wrong first:
+
+- **The cycle is exactly seven days.** Any other length and a programme drifts
+  through the clock, which is the one thing dayparting exists to prevent.
+- **Blocks are prescribed, not packed.** `packChannel()` optimises content
+  share, which is right everywhere else; here a daypart boundary has to land
+  on a half-hour or "cartoons at eight" is a lie. `daypart.py` fills each
+  window to an exact slot count and writes the block list into
+  `channels.json`, and the template uses it as written.
+- **A window showing features must be at least four slots wide.** A feature
+  needs three or four half-hours, so a two-slot window can never hold one — it
+  silently falls through to the short-subject filler instead. The first build
+  put Popeye on at eleven at night for exactly this reason. Prime time is 8–10
+  and the late movie runs 10–12 to keep both windows wide enough; `daypart.py`
+  now reports borrowed slots per daypart so the next instance shows up in the
+  build output rather than needing someone to watch the channel at 11pm.
+
+CH 01 is also the only channel that repeats material from elsewhere on the
+dial. That is the same licence `suggest.py` takes, and the alternative —
+harvesting a separate pool — would mean the station's day could not draw on
+the good channels.
 
 ### The ★ SUGGESTED lineup
 
@@ -496,4 +555,3 @@ method exists at all.
 ## Possible next moves
 
 - Station idents and a sign-off card between programmes
-- Dayparting — cartoons in the morning, creature features after midnight
