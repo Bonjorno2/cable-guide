@@ -206,8 +206,12 @@ def clean(t):
     t = re.sub(r"(?i)\s*\(\s*cc\s*\).*$", "", t)   # "(CC)" caption marker + trailing slugs
     t = re.sub(r"(?i)\s*[-–—|]\s*(?:full (?:movie|film|length)|complete film|"
                r"public domain|hd remaster\w*)\b.*$", "", t)
-    # trailing decoration, including uploader star ratings like "★★★½"
-    return t[:70].strip(" -–—:,|·•★☆⭐*_½¼¾⯨")
+    # Trailing decoration: uploader star ratings like "★★★½", and the "+" DVD
+    # Savant appends to a review that also covers a second title. That plus is
+    # Erickson's shelf-mark, not part of the film's name, and it rode into four
+    # listings ("Ace in the Hole +") because curated.py titles the critic
+    # channels from his review headings rather than from archive.org's metadata.
+    return t[:70].strip(" -–—:,|·•★☆⭐*_½¼¾⯨+")
 
 
 def build(spec, taken):

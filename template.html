@@ -814,6 +814,7 @@ function buildGrid(){
         el.title=hhmm(p.start)+' – '+hhmm(p.end)+'\n'+
                  list.map(it=>'· '+it.title+(it.year?' ('+it.year+')':'')+
                               (it.grade?'  ['+it.grade+']':'')+
+                              (it.collectors?'  '+it.collectors+' collectors':'')+
                               (it.dir?'  dir. '+it.dir:'')+
                               '  —  '+mins(it.dur)+
                               (it.desc?'\n    '+it.desc:'')).join('\n\n');
@@ -947,11 +948,18 @@ function refresh(force){
   ].filter(Boolean).join('  ·  ');
 
   // Where a curator or critic said something about this film, say it.
+  // `collectors` is CH 12's third signal — the number of independent
+  // coherent archive.org shelves that saved the film. The grade is on the
+  // badge and the shelf is the channel, so this is the one endorsement of the
+  // three a viewer has no other way to see.
   const cred=$('cred');
-  if(cur.grade || cur.dir){
+  if(cur.grade || cur.dir || cur.collectors){
     cred.innerHTML=(cur.grade?'<b class="g'+cur.grade.replace(/\W/g,'')+'">'+
                               esc(cur.grade.toUpperCase())+'</b>':'')+
-                   (cur.dir?'<span>dir. '+esc(cur.dir)+'</span>':'');
+                   (cur.dir?'<span>dir. '+esc(cur.dir)+'</span>':'')+
+                   (cur.collectors?'<span title="independent archive.org '+
+                     'collectors who saved this film">'+cur.collectors+
+                     ' collectors</span>':'');
     cred.hidden=false;
   } else cred.hidden=true;
 
