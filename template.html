@@ -1202,10 +1202,12 @@ $('bScroll').addEventListener('click',e=>{e.stopPropagation();scrollOn=!scrollOn
 
 /* ---------- the suggested guide ----------
    CH 15 DOUBLE holds the films that sit on a coherent curator shelf *and*
-   carry a DVD Savant grade. suggest.py splits those back out into five themed
-   channels; this swaps the dial over to them. Same EPOCH, so both lineups stay
-   pure functions of wall-clock time -- nothing restarts, you are just looking
-   at a smaller, entirely vouched-for service. */
+   carry a DVD Savant grade. suggest.py splits those back out into six themed
+   channels and adds a seventh, CH 07 COMEDY, drawn from CH 52 -- six film
+   channels in the same register and nothing to follow them with is a mood
+   rather than a service. This swaps the dial over to them. Same EPOCH, so both
+   lineups stay pure functions of wall-clock time -- nothing restarts, you are
+   just looking at a smaller, vouched-for service. */
 let picks = false;
 function writeURL(){
   try{

@@ -128,11 +128,24 @@ who owned his negative and didn't file the renewal 28 years later. That is
 also why the list is heavy on syndicated filmed comedy and contains none of
 the network shows people remember better: CBS renewed, Desilu renewed.
 
-Two details that turned out to matter more than the series list:
+Three details that turned out to matter more than the series list:
 
 - **Caps are per series.** Jack Benny alone has 200 free episodes; uncapped,
   the channel is the Jack Benny channel with guests. The lineup is then dealt
   round-robin, so leaving it on doesn't get you fourteen consecutive Bennys.
+- **A title has to name the episode.** This is the one rule the film channels
+  never need: a film is its title, and a half-hour is not. The channel shipped
+  with `Burns and Allen`, `Burns and Allen # 68`, `Classic TV Comedy: Burns and
+  Allen` and `Fifties Popular Culture - Burns and Allen` all in the grid — six
+  of ten Burns and Allen listings, four of them indistinguishable, reading as a
+  channel stuck on repeat rather than as four different half-hours. Four of
+  Ozzie's fourteen were season packs (`Season One`, `Season 8 to 14`) that
+  survived the duration band because the item happened to carry a
+  single-episode derivative. `names_episode()` strips the series name and the
+  cataloguing and throws out whatever leaves nothing behind. It is deliberately
+  not applied to *poor* titles — the whole Life with Elizabeth shelf is filed
+  as `Misc episode No. 4`, which is a bad title and still a real distinction
+  between one half-hour and the next.
 - **The duration ceiling is `SLOT - MINBREAK`, currently 1770s.** An episode
   longer than that needs the next half-hour up and is handed a whole one — 29
   minutes of programme, 31 minutes of commercials. This channel is where that
@@ -144,7 +157,7 @@ Two details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,445 of 4,061 slots (84%) carry a listing description** — 3,695 of those
+**3,493 of 4,061 slots (86%) carry a listing description** — 3,695 of those
 slots are distinct programmes, the rest being CH 01 replaying the dial. From
 two sources, best first:
 
@@ -175,7 +188,9 @@ restates the title is dropped. 356 items had one — CH 53 alone had 81, CH 19
 had 52 — and since the guide prints title and description into the same
 tooltip, keeping them bought a second line that read as a stutter. Coverage
 fell from 94% to 84% when they went, which is the honest number: those 356
-were never carrying information.
+were never carrying information. It is back to 86% since the CH 52 rebuild —
+the season packs and bare series titles that went were also the items least
+likely to carry a description.
 
 `--repolish` re-runs the cleaning rules over descriptions already stored, with
 no network, which is how to iterate on those rules without a four-minute
@@ -203,7 +218,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `harvest.py` | Queries the Archive.org search + metadata APIs, picks a browser-playable MP4 derivative per item, reads exact per-file durations, writes `channels.json` |
 | `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
 | `daypart.py` | Builds CH 01 THE NETWORK — re-deals existing items into a week that runs to a station's day; no network calls |
-| `suggest.py` | Splits CH 15 into the six themed channels behind the ★ SUGGESTED toggle; no network calls |
+| `suggest.py` | Builds the seven channels behind the ★ SUGGESTED toggle — six split out of CH 15, one drawn from CH 52; no network calls |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
 | `build.py` | Inlines `channels.json` into the template → `index.html` |
@@ -221,7 +236,9 @@ python build.py          # regenerate index.html
 
 `suggest.py` runs last because it is also what writes `channels.json` in the
 compact single-line form the repo stores. The other writers use `indent=1`,
-so skipping it leaves a 36,000-line reformat sitting in the diff.
+so skipping it leaves a 36,000-line reformat sitting in the diff. It now also
+has to run after `sitcom.py` rather than merely before `build.py`, since CH 07
+COMEDY is built out of what CH 52 contains.
 
 `curated.py` keeps the non-feature channels `harvest.py` produced (its `KEEP`
 set) and replaces the rest, so the usual refresh is just `curated.py` then
@@ -319,7 +336,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 49 | THE SHADOW ● | Detectives, murder, Lamont Cranston | 12 | 17h |
 | 50 | POLIZIESCO ● | Italian crime and thrillers | 9 | 16h |
 | 51 | SHORT SUBJECTS ● | Stooges, Our Gang, Little Rascals | 38 | 32h |
-| 52 | LAUGH TRACK † | Half-hour comedy, 1950–1964 | 119 | 59h |
+| 52 | LAUGH TRACK † | Half-hour comedy, 1950–1966 | 119 | 59h |
 | 53 | LLOYD & CO ● | Lloyd, Chaplin, Snub Pollard, 1900–1923 | 110 | 28h |
 
 Gaps in the numbering are deliberate — a dial with holes in it is what a real
@@ -374,26 +391,55 @@ the good channels.
 
 ### The ★ SUGGESTED lineup
 
-The star button swaps the dial for a smaller service built entirely from CH 15
-DOUBLE — the films a curator shelf and a critic both vouched for. Same EPOCH,
+The star button swaps the dial for a smaller, vouched-for service. Same EPOCH,
 so nothing restarts; you are just looking at a shorter dial. `?guide=picks`
 opens straight into it.
 
-| | | films | excellent |
-|---|---|---|---|
-| 01 | NOIR | 47 | 22 |
-| 02 | DIRECTORS | 16 | 12 |
-| 03 | COLOUR | 39 | 14 |
-| 04 | CHILLER | 23 | 8 |
-| 05 | SILENT | 18 | 16 |
-| 06 | ODDMENTS | 10 | 8 |
+| | | | | loop | ads |
+|---|---|---|---|---|---|
+| 01 | NOIR | 47 films | 22 excellent | 84.5h | 14% |
+| 02 | DIRECTORS | 16 films | 12 excellent | 29.0h | 13% |
+| 03 | COLOUR | 39 films | 14 excellent | 64.5h | 15% |
+| 04 | CHILLER | 23 films | 8 excellent | 43.5h | 17% |
+| 05 | SILENT | 18 films | 16 excellent | 34.0h | 16% |
+| 06 | ODDMENTS | 10 films | 8 excellent | 18.0h | 13% |
+| 07 | COMEDY | 62 episodes | 6 series | 31.0h | 14% |
 
-The six noir shelves do not pool into one channel. Pooled they were 63 films
-against 10 for the smallest, so a sixth of the dial held half the service. The
-split follows the line the shelves already draw — two are organised around a
-director, the rest around the films — which gives a viewer a reason to switch
-rather than an even cut by count. DIRECTORS is the densest channel on either
-dial: 12 of its 16 films are graded Excellent.
+Channels 01–06 are CH 15 DOUBLE split up — the films a curator shelf and a
+critic both vouched for. The six noir shelves among them do not pool into one
+channel: pooled they were 63 films against 10 for the smallest, so a sixth of
+the dial held half the service. The split follows the line the shelves already
+draw — two are organised around a director, the rest around the films — which
+gives a viewer a reason to switch rather than an even cut by count. DIRECTORS
+is the densest channel on either dial: 12 of its 16 films are graded Excellent.
+
+### CH 07 COMEDY, and one weaker claim
+
+Channel 07 is not part of that split, and its tag says so: **vouched for once**
+where the others say *endorsed twice*. It is drawn from CH 52, whose boundary
+is a hand-written list of series, cut once more here. One judgement, not two.
+
+It is on the dial because six channels of noir, chiller and silent drama with
+nothing to follow them is a mood rather than a service. The films are the
+argument for this lineup; the comedy is what makes it somewhere you can stay.
+
+The cut keeps six of CH 52's fifteen series, on the line the shows themselves
+drew — an act that already existed before television, carried onto it more or
+less intact. Benny and Burns and Allen came off the radio with their timing
+already formed; Eve Arden brought *Our Miss Brooks* over from CBS radio whole;
+Ozzie and Harriet had been playing themselves for eight years before the
+cameras arrived; Betty White built *Life with Elizabeth* out of a live local
+show she was already doing five days a week. *Topper* is the odd one — a film
+adaptation with no act behind it — and earns its place the other way, by being
+the one premise here anybody still recognises.
+
+That left two series too thin to carry a seventh of a service, so three of the
+six now search archive.org site-wide instead of inside `classic_tv`: Our Miss
+Brooks was four items in the collection and Burns and Allen seven. The
+collection is a useful second filter and this is what it costs. Going wide has
+its own price — the site-wide search for Our Miss Brooks returns eight *radio*
+compilations for every four television episodes, which is what `SHOUTING` in
+`sitcom.py` exists to throw out.
 
 Ad breaks pull from 150 spots in `classic_tv_commercials`. `build.py` prints
 this table, including the ad share, on every build — worth glancing at after
