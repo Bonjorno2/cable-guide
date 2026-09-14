@@ -466,25 +466,30 @@ function packChannel(ch){
   return all;
 }
 
-/* CH 01 arrives with its blocks already decided. packChannel() optimises for
-   content share, which is the right goal everywhere except here: a daypart
-   boundary has to land on a half-hour or "cartoons at eight" is a lie, so
-   daypart.py fills each window to an exact number of slots and the result is
-   used as written. `blocks` is [itemCount, slots, partIndex] against the flat
-   item list. */
+/* Two channels arrive with their blocks already decided, for reasons that look
+   unrelated and are the same reason: packChannel() optimises content share and
+   then shuffles, which is right when the order carries no information and
+   destructive when it does. CH 01's daypart boundary has to land on a half-hour
+   or "cartoons at eight" is a lie. CH 12 is a running order — each film is a
+   near neighbour of the last one in the graph that chose them — and a shuffled
+   walk is just a list again.
+
+   `blocks` is [itemCount, slots, partIndex] against the flat item list, and
+   partIndex is optional: prescribed blocks and the local-clock shift are
+   separate things, and only CH 01 wants both. See programAt for the clock. */
 function prescribed(ch){
   const out = []; let k = 0;
   for(const [n, slots, p] of ch.blocks){
     const items = ch.items.slice(k, k + n); k += n;
     out.push({items, content: items.reduce((s,i)=>s+i.dur, 0),
-              slot: slots * SLOT, part: ch.parts[p]});
+              slot: slots * SLOT, part: ch.parts ? ch.parts[p] : undefined});
   }
   return out;
 }
 
 function buildLineup(list){
   return list.map(c=>{
-    const blocks = c.daypart ? prescribed(c) : packChannel(c);
+    const blocks = c.blocks ? prescribed(c) : packChannel(c);
     const cum=[]; let t=0;
     for(const b of blocks){ cum.push(t); t+=b.slot }
     return {...c, blocks, cum, cycle:t};
@@ -814,7 +819,7 @@ function buildGrid(){
         el.title=hhmm(p.start)+' – '+hhmm(p.end)+'\n'+
                  list.map(it=>'· '+it.title+(it.year?' ('+it.year+')':'')+
                               (it.grade?'  ['+it.grade+']':'')+
-                              (it.collectors?'  '+it.collectors+' collectors':'')+
+                              (vouch(it)?'  '+vouch(it):'')+
                               (it.dir?'  dir. '+it.dir:'')+
                               '  —  '+mins(it.dur)+
                               (it.desc?'\n    '+it.desc:'')).join('\n\n');
@@ -831,6 +836,18 @@ function buildGrid(){
 }
 const esc = s => s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const trunc = (s,n) => s.length>n ? s.slice(0,n-1).trimEnd()+'…' : s;
+
+/* Why a film is on CH 12 at all. The other two signals the curation carries
+   already show themselves — the grade is a badge and the shelf is the channel
+   — but "the people who saved these films saved this one too" is invisible
+   unless the listing says it, and on that channel it is the whole argument.
+   Half of CH 12 was found that way and by nothing else. */
+function vouch(it){
+  if(it.kind==='graph') return it.reach ? 'saved beside '+it.reach+' films here' : '';
+  if(it.kind==='triple') return 'endorsed three times';
+  if(it.kind==='double') return 'endorsed twice';
+  return '';
+}
 
 function syncPan(){
   const pps=PPS();
@@ -948,18 +965,13 @@ function refresh(force){
   ].filter(Boolean).join('  ·  ');
 
   // Where a curator or critic said something about this film, say it.
-  // `collectors` is CH 12's third signal — the number of independent
-  // coherent archive.org shelves that saved the film. The grade is on the
-  // badge and the shelf is the channel, so this is the one endorsement of the
-  // three a viewer has no other way to see.
   const cred=$('cred');
-  if(cur.grade || cur.dir || cur.collectors){
+  const why=vouch(cur);
+  if(cur.grade || cur.dir || why){
     cred.innerHTML=(cur.grade?'<b class="g'+cur.grade.replace(/\W/g,'')+'">'+
                               esc(cur.grade.toUpperCase())+'</b>':'')+
                    (cur.dir?'<span>dir. '+esc(cur.dir)+'</span>':'')+
-                   (cur.collectors?'<span title="independent archive.org '+
-                     'collectors who saved this film">'+cur.collectors+
-                     ' collectors</span>':'');
+                   (why?'<span>'+esc(why)+'</span>':'');
     cred.hidden=false;
   } else cred.hidden=true;
 

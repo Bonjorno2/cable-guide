@@ -114,7 +114,10 @@ the curating:
   other. This is CH 15 DOUBLE.
 - **`triple_endorsed.json`** — the 59 of those that at least two independent
   *collectors* saved as well. A third judgement, from a third population.
-  This is CH 12 TRIPLE, and it is the best channel on the dial.
+- **`channel.json`** — not a list at all. `channel.py` finds a region of the
+  co-favourite graph, expands it with films the endorsement passes never saw,
+  checks every one plays, and puts them **in a running order**. This is CH 12
+  COLLECTORS, built by `walk.py`, and it is the best channel on the dial.
 
 Grades and directors ride along into the UI: the now-playing panel shows
 `EXCELLENT · dir. Carol Reed`, and Excellent-graded programmes carry a ★ in
@@ -160,7 +163,7 @@ Three details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,551 of 4,119 slots (86%) carry a listing description** — 3,695 of those
+**3,533 of 4,101 slots (86%) carry a listing description** — 3,697 of those
 slots are distinct programmes, the rest being CH 01 and CH 12 replaying the
 dial. From two sources, best first:
 
@@ -199,10 +202,9 @@ likely to carry a description.
 no network, which is how to iterate on those rules without a four-minute
 refetch.
 
-**Size**: descriptions roughly doubled `index.html`, 616 KB → 1.2 MB, and CH 12
-repeating 58 of them takes it to **1.4 MB** (444 KB gzipped, which is what a
-static host actually sends). Lower `MAXLEN` in `describe.py` and re-run
-`--repolish` if that matters more than the prose.
+**Size**: descriptions roughly doubled `index.html`, 616 KB → **1.4 MB**
+(441 KB gzipped, which is what a static host actually sends). Lower `MAXLEN`
+in `describe.py` and re-run `--repolish` if that matters more than the prose.
 
 ### The speed trick, taken from ia-curation's README
 
@@ -222,7 +224,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `harvest.py` | Queries the Archive.org search + metadata APIs, picks a browser-playable MP4 derivative per item, reads exact per-file durations, writes `channels.json` |
 | `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
 | `daypart.py` | Builds CH 01 THE NETWORK — re-deals existing items into a week that runs to a station's day; no network calls |
-| `triple.py` | Builds CH 12 TRIPLE — the films three independent signals agree on, copied out of CH 15; no network calls |
+| `walk.py` | Builds CH 12 COLLECTORS — imports ia-curation's programmed channel and writes its running order out as fixed blocks; no network calls |
 | `suggest.py` | Builds the seven channels behind the ★ SUGGESTED toggle — six split out of CH 15, one drawn from CH 52; no network calls |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
@@ -233,9 +235,9 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 python harvest.py        # collection-based channels (~45 min, API-throttled)
 python curated.py        # curator/critic channels from ia-curation (~5 min)
 python sitcom.py         # CH 52 only, merged in place (~1 min)
+python walk.py           # CH 12 COLLECTORS, from ia-curation's channel.json
 python describe.py       # listing descriptions (skips items that have one)
 python daypart.py        # CH 01 THE NETWORK; needs the genre channels to exist
-python triple.py         # CH 12 TRIPLE; copies out of CH 15, after describe.py
 python suggest.py        # the ★ SUGGESTED lineup; must run last before build
 python build.py          # regenerate index.html
 ```
@@ -244,22 +246,26 @@ python build.py          # regenerate index.html
 compact single-line form the repo stores. The other writers use `indent=1`,
 so skipping it leaves a 36,000-line reformat sitting in the diff. It now also
 has to run after `sitcom.py` rather than merely before `build.py`, since CH 07
-COMEDY is built out of what CH 52 contains. `triple.py` writes the compact
-form too, for the same reason and so that re-running it on its own is free of
-side effects.
+COMEDY is built out of what CH 52 contains. `walk.py` writes the compact form
+too, so re-running it on its own is free of side effects.
+
+`walk.py` goes *before* `describe.py` rather than after: it brings in films
+that are new to the dial, and descriptions are `describe.py`'s job for every
+channel rather than something each builder does for itself. Run it the other
+way round and CH 12 ships undescribed.
+
+On the other side, `channel.py` in ia-curation has to have run at least once —
+`walk.py` reads `data/channel.json` and does not regenerate it. That is the
+same relationship `curated.py` has with `curators.json`: this repo consumes
+that project's outputs and never re-derives them.
 
 `curated.py` keeps the non-feature channels `harvest.py` produced (its `KEEP`
-set) and replaces the rest, so the usual refresh is `curated.py`, `triple.py`,
-`build.py` — CH 12 is deliberately *not* in `KEEP`, because it is a copy of
-CH 15 and a stale copy is worse than no channel. `sitcom.py` only ever touches
+set) and replaces the rest, so the usual refresh is `curated.py`, `walk.py`,
+`build.py` — CH 12 is deliberately *not* in `KEEP`, because a stale copy of a
+programmed channel is worse than no channel. `sitcom.py` only ever touches
 CH 52 — it drops that channel, rebuilds it and merges — so it is safe to re-run
 alone, in any order. CH 52 *is* in `KEEP`, so a refresh doesn't delete a
 channel it has no way to rebuild.
-
-`triple.py` has to run after `describe.py`, which is a weaker constraint than
-it looks: it copies whole items out of CH 15, so anything not on them at the
-time — a blurb, a corrected title — is simply not on CH 12 either, and the
-channel silently ships without the prose that is half of what it is for.
 
 ### Why the harvest is slow, and how it is kept from being slower
 
@@ -292,16 +298,16 @@ static host, or open it directly.
 
 ## Channels
 
-**49 channels, 3,695 programmes filling 4,119 slots** — CH 01 replays the dial
-on a clock and CH 12 replays the best of it, so they are the difference between
-the two. Most channels run for days before they repeat; DOUBLE and SAVANT run
-for over a week.
+**49 channels, 3,697 programmes filling 4,101 slots** — CH 01 replays the dial
+on a clock and CH 12 re-programmes a corner of it, so they are the difference
+between the two. Most channels run for days before they repeat; DOUBLE and
+SAVANT run for over a week.
 
 Channels marked ● are curator shelves from ia-curation — a real point of view,
 not a query. CH 01 is marked ◑: the dayparted channel, and the only one that
-runs on your clock rather than everyone's. CH 12 is marked ◆: three
-independent endorsements rather than one or two. CH 52 is marked †: a
-hand-written list of public-domain series,
+runs on your clock rather than everyone's. CH 12 is marked ◆: the only one
+that arrives already programmed, in an order that means something. CH 52 is
+marked †: a hand-written list of public-domain series,
 because no query can tell a free sitcom from a bootlegged one.
 
 | CH | Name | What it is | Items | Loops |
@@ -313,7 +319,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 07 | NEWSREEL | Universal Newsreels | 201 | 24h |
 | 08 | A/V CLUB | Classroom & training films | 180 | 59h |
 | 09 | THE VAULT | Television past | 150 | 111h |
-| 12 | **TRIPLE** ◆ | **Endorsed three times, independently** | 58 | 106h |
+| 12 | **COLLECTORS** ◆ | **Gothic to giallo, in a running order** | 40 | 73h |
 | 13 | HOME MOVIES | Strangers' amateur film | 140 | 36h |
 | 14 | MISSION CTRL | NASA film & mission footage | 129 | 46h |
 | 15 | **DOUBLE** ● | **Endorsed twice, independently** | 153 | 274h |
@@ -365,64 +371,88 @@ shelves are noir, and without it CH 19, 20, 33, 42 and 43 would be the same
 twenty films. The exceptions are the two channels that are *views* over the
 dial rather than harvests of it — CH 01 and CH 12 — and both say so.
 
-### CH 12 TRIPLE — the third signal
+### CH 12 COLLECTORS — the one channel that was programmed
 
-CH 15 DOUBLE is a good channel because two strangers agreed about every film on
-it. There is a third signal in the same project, it was sitting in
-`triple_endorsed.json` unread for the whole build, and it is the one that is
-hardest to manufacture.
+Every other channel here is a *lineup*: a set of films, with an order imposed
+afterwards by `packChannel()`, which fills half-hours longest-first and then
+shuffles so the channel is not front-loaded. That is the correct thing to do to
+a set. It is the wrong thing to do to a programme, and ia-curation ends in one.
 
-`fav_analyze.py` scores the *favouriter* exactly as `analyze.py` scores an
-uploader: 894,629 favourite edges across 132,668 people, of whom **1,108 hold a
-shelf coherent enough to be a point of view** rather than a bookmark pile.
-Intersect that with the other two and 59 films are left:
+`channel.py` over there asks the question a ranked list gets to dodge — *can
+you put this in front of someone and have them watch it tonight?* — and it
+costs three things a list never pays for:
 
-| signals | films |
+- **One film per film.** `Scars Of Dracula 1970` (3,636 downloads) and `Scars
+  of Dracula` (29,106) are one picture on two items, nowhere near each other in
+  any ranking. A list can carry both and still be true.
+- **It has to play.** Every entry is checked against the item's `_files.xml`
+  for a real video file, and the runtime is read off that same file instead of
+  believed from a catalogue. It is the only check in that project that verifies
+  the thing rather than a claim about it.
+- **A running order, not a ranking.** Each film is a near neighbour of the one
+  before it in the co-favourite graph, so consecutive pictures share actual
+  collectors rather than a genre label — and a franchise is held off for a few
+  slots once it has played, because the greedy walk left alone puts nine Hammer
+  pictures back to back.
+
+What it programmes is a *region* of that graph, not a shelf: mutual
+nearest-neighbour components of the 155 endorsed films, gated on density and
+then ranked by **obscurity**, since past a floor a denser region mostly means a
+bigger crowd. The densest thing in there is the 1950s monster shelf that every
+public-domain site already has. The winner is gothic → giallo → slasher,
+1957–1989, median 2,429 downloads:
+
+| | films |
 |---|---|
-| shelf + Erickson | 96 |
-| **all three** | **59** |
+| endorsed three times | 4 |
+| endorsed twice | 18 |
+| **found by the graph alone** | **18** |
 
-The independence is structural rather than asserted. The uploader acted years
-before there was anything to favourite; Erickson was writing about DVDs for a
-column that is no longer on the live web and never saw archive.org; and a
-favouriter cannot see anybody else's list in aggregate. Nothing here is one
-crowd agreeing with itself, which is the whole reason to give it a channel.
+Those 18 are the interesting half. No endorsement pass ever saw them; they are
+here because they sit beside 18 to 22 of the other films in the collections of
+people with nothing else in common. *Blood on Satan's Claw*, *Rasputin the Mad
+Monk*, *The Gorgon*, *Count Yorga*.
 
-**58 of the 59 make it to air.** The miss is *World on a Wire*, and it fails
-twice over: 3h24m of Fassbinder is past `curated.py`'s 11,000-second ceiling so
-it never reached CH 15 to be copied, and a 1973 West German television film is
-plainly still in copyright. `triple.py` prints any such miss by name rather
-than quietly shipping a shorter channel.
+`walk.py` is deliberately thin — it re-decides nothing — but three things had
+to give:
 
-Like CH 01, this is a **view** and not a harvest: every film is already in CH 15
-with its duration, derivative, grade, director and DVD Savant blurb resolved, so
-`triple.py` makes no network calls and claims nothing away from DOUBLE.
+- **The running order had to survive the scheduler.** A shuffled walk is a list
+  again. CH 01 already needed prescribed blocks for its dayparts, so the
+  mechanism existed, but it was bundled with the local-clock shift and this
+  channel wants to stay globally identical. `blocks` now drives the packing and
+  `daypart` only drives the clock; CH 12 ships blocks and no daypart.
+- **Titles come from ia-curation's `titles.py`, not the guide's `clean()`.**
+  This shelf's uploader ends every title with a bare year, and the guide's
+  cleaner refuses to cut one *on purpose* — any rule blunt enough would also
+  destroy `Space 1999` and `Big News of 1941`. `titles.clean()` cuts it because
+  it parses the year rather than matching a pattern, has a 38-case suite behind
+  it, and repairs `The Hound Of The Baskeгvilles`, which is genuinely spelled
+  with a Cyrillic ghe. Without it, 38 of 40 listings would read `Horror Of
+  Dracula 1958` beside a column already printing 1958.
+- **The year in the title beats the year in the catalogue**, where they
+  disagree (twice: *Hands of the Ripper*, *Baron Blood*). The uploader was
+  naming the film; `release_year()` is reading a date field that is sometimes
+  the edition.
 
-Two decisions inside it:
+**Why it is on the screen and not just in the data**: the panel says
+`EXCELLENT · dir. Terence Fisher · endorsed three times`, or on a graph find,
+`saved beside 22 films here`. A grade is already a badge and the shelf is
+already the channel,
+but "the people who kept these films kept this one too" is invisible unless the
+listing says so — and on this channel it is the entire argument for half the
+lineup.
 
-- **The collector count rides along into the UI**, next to the grade and the
-  director — `EXCELLENT · dir. Hubert Cornfield · 10 collectors`. It is the one
-  signal of the three a viewer cannot otherwise see: the shelf *is* the channel
-  and the grade is already a badge, so without it the channel's whole claim is
-  a tag that nothing on screen backs up.
-- **Rarest first, within grade.** Thirty collectors saved *Kiss Me Deadly*,
-  which also has 80,000 downloads; two saved Murnau's *Phantom*, which has
-  2,555. The two is the more interesting number — a film almost nobody
-  downloads that two separate coherent shelves went out of their way to keep is
-  exactly what popularity sorting can never surface. The order decides nothing
-  about airtime, since `packChannel()` reshuffles blocks on a seed; it is how
-  the channel is stored and read.
+40 films, 73.5 hours, 17% commercials, all 40 described. **38 of them are
+already somewhere else on the dial** — mostly CH 15 and CH 17, which harvest
+the same shelf by popularity — so what is new here is not the material but the
+order, and the reason each film is next to the last one. Only *Night Creatures*
+and *The Two Faces of Dr. Jeykll* are new material, and `walk.py` prints that
+count on every run, because it is the number that says whether the graph is
+still earning its keep.
 
-What comes out is 58 films in 106 hours at 15% commercials, 36 of them graded
-Excellent — a **62% Excellent density against DOUBLE's 52%**, on a loop short
-enough to have a shape and long enough that nothing repeats inside four days.
-Every programme on it carries a critic's prose in the listing, because every
-programme on it is a film Erickson reviewed.
-
-It is not in the ★ SUGGESTED lineup, deliberately. Those seven channels are
-already the double-endorsed films split up, so a TRIPLE among them would be a
-channel showing what the other six are showing — the one thing a small service
-cannot afford.
+It is not in the ★ SUGGESTED lineup. That service is the double-endorsed films
+split six ways plus the comedy, and this channel overlaps two of those six
+while answering a different question.
 
 ### CH 01 THE NETWORK — the one channel with a clock
 
@@ -453,7 +483,10 @@ wrong first:
   share, which is right everywhere else; here a daypart boundary has to land
   on a half-hour or "cartoons at eight" is a lie. `daypart.py` fills each
   window to an exact slot count and writes the block list into
-  `channels.json`, and the template uses it as written.
+  `channels.json`, and the template uses it as written. CH 12 now uses the same
+  mechanism for an unrelated reason — it arrives in a running order that a
+  shuffle would destroy — so carrying `blocks` and running on a local clock
+  are two separate flags rather than one.
 - **A window showing features must be at least four slots wide.** A feature
   needs three or four half-hours, so a two-slot window can never hold one — it
   silently falls through to the short-subject filler instead. The first build
@@ -675,7 +708,9 @@ method exists at all.
   Nudist* reached the MATINEE lineup before being caught by eye.
 - **Some curator shelves hold films that are plainly still in copyright** —
   CH 17 has *The Silence of the Lambs*, CH 38 is Japanese cinema from
-  2001–2022. They are on archive.org, which is not the same as being free to
+  2001–2022, and CH 12 is programmed out of the same shelf CH 17 draws on, so
+  it inherits the problem: Hammer and giallo pictures from 1957 to 1989 are
+  not public domain because somebody uploaded them. They are on archive.org, which is not the same as being free to
   rebroadcast. Drop those channels from `SHELVES` in `curated.py` if that
   matters for how you use this.
 - **Timezones**: slots align to :00/:30 in the viewer's local time. A viewer in
