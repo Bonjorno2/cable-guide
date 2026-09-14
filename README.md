@@ -175,6 +175,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | `describe.py` | Adds a listing description to every programme (`--dry`, `--force`, `--repolish`) |
 | `harvest.py` | Queries the Archive.org search + metadata APIs, picks a browser-playable MP4 derivative per item, reads exact per-file durations, writes `channels.json` |
 | `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
+| `suggest.py` | Splits CH 15 into the six themed channels behind the ★ SUGGESTED toggle; no network calls |
 | `channels.json` | The harvested lineups |
 | `template.html` | The site — layout, schedule engine, player, guide grid |
 | `build.py` | Inlines `channels.json` into the template → `index.html` |
@@ -184,8 +185,14 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 python harvest.py        # collection-based channels (~45 min, API-throttled)
 python curated.py        # curator/critic channels from ia-curation (~5 min)
 python sitcom.py         # CH 52 only, merged in place (~1 min)
+python describe.py       # listing descriptions (skips items that have one)
+python suggest.py        # the ★ SUGGESTED lineup; must run last before build
 python build.py          # regenerate index.html
 ```
+
+`suggest.py` runs last because it is also what writes `channels.json` in the
+compact single-line form the repo stores. The other writers use `indent=1`,
+so skipping it leaves a 36,000-line reformat sitting in the diff.
 
 `curated.py` keeps the non-feature channels `harvest.py` produced (its `KEEP`
 set) and replaces the rest, so the usual refresh is just `curated.py` then
@@ -288,6 +295,29 @@ cable box looked like.
 `curated.py` keeps a global set of claimed identifiers and titles, so no
 programme appears on two channels. That matters here: half a dozen shelves are
 noir, and without it CH 19, 20, 33, 42 and 43 would be the same twenty films.
+
+### The ★ SUGGESTED lineup
+
+The star button swaps the dial for a smaller service built entirely from CH 15
+DOUBLE — the films a curator shelf and a critic both vouched for. Same EPOCH,
+so nothing restarts; you are just looking at a shorter dial. `?guide=picks`
+opens straight into it.
+
+| | | films | excellent |
+|---|---|---|---|
+| 01 | NOIR | 47 | 22 |
+| 02 | DIRECTORS | 16 | 12 |
+| 03 | COLOUR | 39 | 14 |
+| 04 | CHILLER | 23 | 8 |
+| 05 | SILENT | 18 | 16 |
+| 06 | ODDMENTS | 10 | 8 |
+
+The six noir shelves do not pool into one channel. Pooled they were 63 films
+against 10 for the smallest, so a sixth of the dial held half the service. The
+split follows the line the shelves already draw — two are organised around a
+director, the rest around the films — which gives a viewer a reason to switch
+rather than an even cut by count. DIRECTORS is the densest channel on either
+dial: 12 of its 16 films are graded Excellent.
 
 Ad breaks pull from 150 spots in `classic_tv_commercials`. `build.py` prints
 this table, including the ad share, on every build — worth glancing at after

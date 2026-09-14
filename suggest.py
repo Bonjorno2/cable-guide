@@ -20,21 +20,29 @@ CURATION = r"C:\Users\myerj\Desktop\ia-curation"
 DOUBLE = os.path.join(CURATION, "data", "double_endorsed.json")
 SOURCE_CH = 15
 
-# The 15 shelves collapse to 5 channels. Five of them are noir variants and two
+# The 15 shelves collapse to 6 channels. Six of them are noir variants and two
 # are colourization projects; kept apart they make channels of 3-9 films, whose
 # loops come round fast enough to notice. Matched on a substring because the
 # shelf names carry en-dashes that do not survive every encoding intact.
+#
+# The noir shelves split in two rather than pooling, because pooled they were
+# 63 films against 10 for the smallest channel — a sixth of the dial holding
+# half the service. The line is the one the shelves themselves draw: two are
+# organised around a director, the rest around the films. That also gives the
+# split a reason a viewer can feel, which an even cut by count would not.
 THEMES = [
     (1, "NOIR", "Endorsed twice · the noir shelves", [
-        "fn01r Noir", "Noir: Preminger", "Director-Forward Noir",
-        "Intros Intact", "Gloria Grahame", "Best Available Source: Noir"]),
-    (2, "COLOUR", "Endorsed twice · colourized and upscaled", [
+        "fn01r Noir", "Intros Intact", "Gloria Grahame",
+        "Best Available Source: Noir"]),
+    (2, "DIRECTORS", "Endorsed twice · Preminger, Siodmak, Mann, Wilder", [
+        "Noir: Preminger", "Director-Forward Noir"]),
+    (3, "COLOUR", "Endorsed twice · colourized and upscaled", [
         "Colourized and Upscaled", "DeOldify"]),
-    (3, "CHILLER", "Endorsed twice · Hammer, giallo, the nasty years", [
+    (4, "CHILLER", "Endorsed twice · Hammer, giallo, the nasty years", [
         "Retro Chiller"]),
-    (4, "SILENT", "Endorsed twice · the silent canon", [
+    (5, "SILENT", "Endorsed twice · the silent canon", [
         "Complete Silent Shelf", "Silent Canon in HD", "Keystone and After"]),
-    (5, "ODDMENTS", "Endorsed twice · grindhouse, expressionism, oddments", [
+    (6, "ODDMENTS", "Endorsed twice · grindhouse, expressionism, oddments", [
         "Grindhouse International", "Black-and-White Benchmarks",
         "Les Vampires"]),
 ]

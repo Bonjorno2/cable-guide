@@ -151,6 +151,20 @@ def repolish(data):
           file=sys.stderr)
 
 
+def echoes_title(title, desc):
+    """True when a description only restates the title.
+
+    A lot of archive.org items have a description field holding the title
+    again. The guide shows both in the same tooltip, so storing it buys a
+    second line that says nothing; better to leave the programme undescribed
+    and let the listing be short.
+    """
+    def norm(s):
+        return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+    t, d = norm(title), norm(desc)
+    return len(t) >= 10 and d.startswith(t[:30])
+
+
 def main():
     dry = "--dry" in sys.argv
     force = "--force" in sys.argv
@@ -188,7 +202,7 @@ def main():
     got = 0
     with ThreadPoolExecutor(max_workers=24) as ex:
         for it, d in zip(todo, ex.map(meta_description, [t["id"] for t in todo])):
-            if d:
+            if d and not echoes_title(it["title"], d):
                 it["desc"] = shorten(d)
                 it["desc_src"] = "ia"
                 got += 1

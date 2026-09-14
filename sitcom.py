@@ -80,10 +80,47 @@ OMNIBUS = re.compile(r"(?i)complete (tv )?(series|season)|full series|all \d+ ep
 
 # One prolific uploader of 1950s television brands every item with a shelf
 # prefix — "Fifties Television:", "Early Television Comedy:", "1950's
-# Television: -". It is their cataloguing, not the programme's name, and it
+# Television - ". It is their cataloguing, not the programme's name, and it
 # reads badly in a listings grid where the channel already says what this is.
-PREFIX = re.compile(r"(?i)^\s*(?:early |fifties |1950'?s |1960'?s )+"
-                    r"television(?: comedy)?\s*:\s*-?\s*")
+# Others prefix the station they taped it off ("WGN Channel 9 - ") or their
+# own reaction to it ("LMAO: ").
+PREFIX = re.compile(r"(?i)^\s*(?:(?:early |classic |fifties |sixties |"
+                    r"1950'?s |1960'?s )+television(?: comedy)?"
+                    r"|lmao|w[a-z]{2,3} channel \d+|k[a-z]{2,3} tv)"
+                    r"\s*[:\-–—]\s*-?\s*")
+
+# "61 02 12 The Jack Benny Program S 11e 17 Death Row Sketch" — one uploader
+# files every episode under YY MM DD plus a season code. The air date is real
+# information, so it is lifted into `year` before being cut rather than simply
+# thrown away; the season code is not, and goes.
+DATECODE = re.compile(r"^\s*([0-9]{2})\s+[0-9]{2}\s+[0-9]{2}\s+")
+# Season codes arrive spaced ("S 11e 17"), punctuated ("Topper: S1E14,") and
+# truncated at the end of a cut title, so the separators either side are part
+# of the match rather than assumed to be spaces.
+SEASONCODE = re.compile(r"(?i)[\s:,\-–—]*\bs\s*[0-9]{1,2}\s*e?\s*[0-9]{1,2}\b"
+                        r"[\s:,\-–—]*")
+# A trailing "— Aired: 11/04/1951", which the date already says.
+AIRED = re.compile(r"(?i)\s*[-–—]?\s*aired\s*:?\s*[0-9/.\-]+\s*$")
+# UTF-8 bytes that were read as latin-1: "–" arrives as "â\x80\x93". Repaired
+# by reversing the mistake rather than deleting the characters, which gets the
+# real dash back instead of a gap.
+MOJIBAKE = re.compile(r"[ÂÃâ][-¿]")
+# Truncation debris. harvest.clean() cuts titles at 70 characters, which can
+# land mid-parenthetical and leave "... The Drugstore (Comple".
+ORPHAN_PAREN = re.compile(r"\s*\([^)]{0,40}$")
+# A trailing bare date, "( 1953 10 09)", and an uploader's shelf tag,
+# "(1954 TV Com Fan)" — both cataloguing rather than title.
+PAREN_JUNK = re.compile(r"\s*\(\s*(?:19|20)\d\d(?:[\s./-]+\d{1,2}){0,2}"
+                        r"(?:\s+[A-Za-z][A-Za-z ]{1,24})?\s*\)")
+
+
+def demojibake(t):
+    if not MOJIBAKE.search(t):
+        return t
+    try:
+        return t.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return t
 # Quote characters, except an apostrophe doing work inside a word: uploaders
 # wrap episode names in ''these'' and "these", but "George's Old Flame" is the
 # actual title and must survive.
@@ -91,18 +128,42 @@ QUOTES = re.compile(r"(?<![A-Za-z])['\"‘’“”]{1,2}|['\"‘’“”]{1,2}
 
 
 def tidy(title):
-    """Strip an uploader's shelf prefix and their quoting habits.
+    """Strip an uploader's cataloguing. Returns (title, year_or_None).
 
     Deliberately narrow. harvest.clean() carries a note about bare-year rules
     destroying real titles, and the same trap is here: a rule broad enough to
     fix every mangled episode name in this channel would eat "Topper" and
-    "My Little Margie" too. So: only the prefix above, only quote characters,
-    and if the result looks damaged, keep what we were given.
+    "My Little Margie" too. So: only the prefixes above, only quote
+    characters, only the two date/season codes — and if the result looks
+    damaged, keep what we were given.
     """
-    t = PREFIX.sub("", title)
+    t = demojibake(title)
+    t = ORPHAN_PAREN.sub("", t)
+    t = PAREN_JUNK.sub("", t)
+    t = AIRED.sub("", t)
+
+    # The date code, if present, is the only year these items carry. Two-digit
+    # and unambiguous: this channel stops at 1964, so 50-99 is 19xx and there
+    # is no 20xx case to get wrong.
+    year = None
+    m = DATECODE.match(t)
+    if m:
+        yy = int(m.group(1))
+        if 45 <= yy <= 99:
+            year = 1900 + yy
+        t = DATECODE.sub("", t)
+
+    t = SEASONCODE.sub(" - ", t)
+    for _ in range(2):                      # "LMAO: Fifties Television - ..."
+        t = PREFIX.sub("", t)
     t = QUOTES.sub("", t).strip(" -–—:,|")
+    t = re.sub(r"\s*-\s*-\s*", " - ", t)
     t = re.sub(r"\s{2,}", " ", t)
-    return t if len(t) >= 3 else title.strip()
+    # Cutting a season code out of "Topper S01E01 Topper Meets The Ghosts"
+    # leaves the series name twice. Only collapse an exact repeat.
+    t = re.sub(r"(?i)^(.{3,}?) - \1\b", r"\1", t)
+    t = ORPHAN_PAREN.sub("", t).strip(" -–—:,|")
+    return (t if len(t) >= 3 else title.strip()), year
 
 
 def epkey(phrase, title):
@@ -172,7 +233,9 @@ def pull(spec, taken):
         if OMNIBUS.search(item["title"]):
             dropped += 1
             continue
-        item["title"] = tidy(item["title"])
+        item["title"], yr = tidy(item["title"])
+        if yr and not item.get("year"):
+            item["year"] = yr
         key = item["title"].lower()
         if item["id"] in taken or key in taken:
             continue
