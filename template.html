@@ -190,13 +190,16 @@
   .times .corner{flex:0 0 var(--chan-w);border-right:2px solid #07052a;
     display:flex;align-items:center;padding-left:11px;font-size:10px;
     letter-spacing:.22em;color:var(--gold);font-weight:700}
-  .times .track{position:relative;flex:1 1 auto;overflow:hidden}
+  .times .track{position:relative;flex:1 1 auto;overflow:hidden;touch-action:none}
   .times .track .inner{position:absolute;inset:0;will-change:transform}
   .times .slot{position:absolute;top:0;height:100%;display:flex;align-items:center;
     padding-left:9px;font-size:11px;font-weight:700;letter-spacing:.09em;
     border-left:2px solid rgba(255,255,255,.3)}
 
-  .rowsclip{position:relative;flex:1 1 auto;overflow:hidden}
+  /* touch-action:none so a drag drives the guide instead of the browser's own
+     scroll/pull-to-refresh; the app is a fixed viewport, so nothing is lost. */
+  .rowsclip{position:relative;flex:1 1 auto;overflow:hidden;touch-action:none;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
   .rowsmove{position:absolute;left:0;right:0;top:0;will-change:transform}
 
   .row{display:flex;height:var(--grid-h);cursor:pointer}
@@ -232,6 +235,9 @@
 
   .hint{position:absolute;right:9px;bottom:6px;z-index:6;font-size:9.5px;
     letter-spacing:.15em;color:rgba(255,255,255,.42);pointer-events:none;text-transform:uppercase}
+  /* keyed off hover, not width: a narrow desktop window still has a keyboard */
+  .hint .ht{display:none}
+  @media (hover:none){ .hint .hk{display:none} .hint .ht{display:inline} }
 
   .dial{
     position:fixed;top:22px;right:26px;z-index:30;font-size:58px;font-weight:900;
@@ -319,7 +325,7 @@
     <div class="rowsclip" id="rowsClip">
       <div class="rowsmove" id="rowsMove"></div>
       <div class="nowline" id="nowLine" hidden></div>
-      <div class="hint">↑↓ channel · ←→ guide · type a number · F = full screen · space = pause scroll</div>
+      <div class="hint"><span class="hk">↑↓ channel · ←→ guide · type a number · F = full screen · space = pause scroll</span><span class="ht">drag the guide · tap a row to tune</span></div>
     </div>
   </div>
 
@@ -546,6 +552,11 @@ let rowEls   = [];
 let winStart = 0;
 let liveSig  = '';
 let hovering = false;  // pointer resting on the grid pauses the crawl
+let drag     = null;   // in-progress touch/pointer gesture on the grid
+let flingY   = 0;      // post-release momentum, px/sec
+let flingX   = 0;      // post-release momentum, guide-seconds/sec
+const FRICTION = 3.2;  // exponential decay, per second
+const DRAG_SLOP = 8;   // px before a press is judged a drag and not a tap
 let lastSeek = 0;      // throttles the drift resync
 const fails  = {};     // media key -> consecutive load failures
 const DEAD   = new Set();
@@ -742,15 +753,36 @@ function markLive(){
 }
 
 /* ---------- vertical auto-scroll, the way Prevue did it ---------- */
+// The rows are duplicated end-to-end, so scrollY only ever lives in [0,loop).
+const loopH = () => (rowEls.length ? (rowEls[0].offsetHeight||34) : 34) * CH.length;
+function setScrollY(v){ const L=loopH(); scrollY=((v%L)+L)%L }
+const clampPan = v => Math.max(0, Math.min(WINDOW_SECONDS-SLOT, v));
+
 let lastFrame=performance.now();
 function frame(ts){
   const dt=Math.min(0.25,(ts-lastFrame)/1000); lastFrame=ts;
-  if(scrollOn && !hovering && rowEls.length){
-    const rowH=rowEls[0].offsetHeight||34;
-    const loop=rowH*CH.length;
-    scrollY=(scrollY + dt*20) % loop;          // ~20px/sec, a slow crawl
+
+  if(rowEls.length){
+    // A finger on the glass wins; then a fling still settling; then the crawl.
+    if(drag && drag.axis==='y'){
+      /* the pointermove handler already placed it */
+    } else if(flingY){
+      setScrollY(scrollY + flingY*dt);
+      flingY *= Math.exp(-FRICTION*dt);
+      if(Math.abs(flingY) < 2) flingY=0;
+    } else if(scrollOn && !hovering && !drag){
+      setScrollY(scrollY + dt*20);             // ~20px/sec, a slow crawl
+    }
     $('rowsMove').style.transform='translateY('+(-scrollY)+'px)';
   }
+
+  if(!drag && flingX){
+    panX = clampPan(panX + flingX*dt);
+    flingX *= Math.exp(-FRICTION*dt);
+    // nothing to fling into once the window is pinned at either end
+    if(Math.abs(flingX) < 1 || panX<=0 || panX>=WINDOW_SECONDS-SLOT) flingX=0;
+  }
+
   syncPan();
   requestAnimationFrame(frame);
 }
@@ -1049,6 +1081,69 @@ function syncMute(){ $('bMute').textContent=video.muted?'UNMUTE':'MUTE' }
 $('rowsClip').addEventListener('mouseenter',()=>hovering=true);
 $('rowsClip').addEventListener('mouseleave',()=>hovering=false);
 
+/* ---------- drag the guide: touch, pen, or mouse ----------
+   Nothing here is natively scrollable -- the grid is overflow:hidden moved by
+   transforms -- so on a phone there is otherwise no way to reach channel 40 or
+   look an hour ahead. One gesture drives both: vertical moves the channel
+   list, horizontal pans time, and the axis is locked on first movement so a
+   sloppy swipe does not wander diagonally. */
+let tapBlocked = false;
+
+function gripStart(e){
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  drag = {id:e.pointerId, x0:e.clientX, y0:e.clientY,
+          lx:e.clientX, ly:e.clientY, lt:performance.now(),
+          sy:scrollY, px:panX, axis:null, moved:false};
+  flingX=flingY=0;                       // a new grab kills the old fling
+  tapBlocked=false;
+  try{ e.currentTarget.setPointerCapture(e.pointerId) }catch(_){}
+}
+
+function gripMove(e){
+  if(!drag || e.pointerId!==drag.id) return;
+  const dx=e.clientX-drag.x0, dy=e.clientY-drag.y0;
+  if(!drag.axis){
+    if(Math.abs(dx)<DRAG_SLOP && Math.abs(dy)<DRAG_SLOP) return;
+    drag.axis = Math.abs(dx)>Math.abs(dy) ? 'x' : 'y';
+    drag.moved = true;
+  }
+  const t=performance.now(), dt=Math.max(8,t-drag.lt)/1000;
+  if(drag.axis==='y'){
+    setScrollY(drag.sy - dy);             // content follows the finger
+    flingY = -(e.clientY-drag.ly)/dt;
+  }else{
+    const pps=PPS();
+    panX   = clampPan(drag.px - dx/pps);
+    flingX = -(e.clientX-drag.lx)/dt/pps;
+  }
+  drag.lx=e.clientX; drag.ly=e.clientY; drag.lt=t;
+  e.preventDefault();
+}
+
+function gripEnd(e){
+  if(!drag || e.pointerId!==drag.id) return;
+  // a finger parked before lifting means "stop here", not "throw it"
+  if(performance.now()-drag.lt > 90){ flingX=flingY=0 }
+  if(drag.axis==='x') flingY=0; else flingX=0;
+  tapBlocked = drag.moved;
+  // touch synthesises mouseenter but never mouseleave, which would otherwise
+  // leave the crawl paused for good after the first swipe
+  if(e.pointerType!=='mouse') hovering=false;
+  drag=null;
+}
+
+[$('rowsClip'), $('timesTrack')].forEach(el=>{
+  el.addEventListener('pointerdown',gripStart);
+  el.addEventListener('pointermove',gripMove);
+  el.addEventListener('pointerup',gripEnd);
+  el.addEventListener('pointercancel',gripEnd);
+});
+
+// rows tune on click, so swallow the click that ends a drag
+$('rowsClip').addEventListener('click',e=>{
+  if(tapBlocked){ e.stopPropagation(); e.preventDefault(); tapBlocked=false }
+},true);
+
 document.addEventListener('keydown',e=>{
   if(e.key==='ArrowUp')   { e.preventDefault(); tune(chIdx-1,true) }
   else if(e.key==='ArrowDown'){ e.preventDefault(); tune(chIdx+1,true) }
@@ -1089,7 +1184,7 @@ buildGrid();
 refresh(true);
 setInterval(()=>refresh(false),1000);
 // roll the guide window forward, but never yank it out from under a reader
-setInterval(()=>{ if(!hovering){ panX=0; buildGrid() } }, 10*60*1000);
+setInterval(()=>{ if(!hovering && !drag && !flingX){ panX=0; buildGrid() } }, 10*60*1000);
 // Listeners go on both elements; which one is on air changes as they swap.
 [$('vA'),$('vB')].forEach(el=>{
   el.addEventListener('ended',e=>{
