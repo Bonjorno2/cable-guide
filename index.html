@@ -1217,7 +1217,6 @@ function gripStart(e){
           sy:scrollY, px:panX, axis:null, moved:false};
   flingX=flingY=0;                       // a new grab kills the old fling
   tapBlocked=false;
-  try{ e.currentTarget.setPointerCapture(e.pointerId) }catch(_){}
 }
 
 function gripMove(e){
@@ -1255,10 +1254,16 @@ function gripEnd(e){
 
 [$('rowsClip'), $('timesTrack')].forEach(el=>{
   el.addEventListener('pointerdown',gripStart);
-  el.addEventListener('pointermove',gripMove);
-  el.addEventListener('pointerup',gripEnd);
-  el.addEventListener('pointercancel',gripEnd);
 });
+// Move/up listen on the document rather than the grid, and the grid does NOT
+// call setPointerCapture(): while a pointer is captured the browser retargets
+// the follow-up click to the capturing element, so every click landed on
+// .rowsclip instead of a .row and nothing could be tuned. Listening on the
+// document keeps a drag tracking when it wanders off the grid, which is the
+// only thing the capture was buying.
+document.addEventListener('pointermove',gripMove);
+document.addEventListener('pointerup',gripEnd);
+document.addEventListener('pointercancel',gripEnd);
 
 // rows tune on click, so swallow the click that ends a drag
 $('rowsClip').addEventListener('click',e=>{
