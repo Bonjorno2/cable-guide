@@ -320,7 +320,12 @@ def title_of(rec, shelf_name="", census=None):
         if m.group(3):
             part += f": {m.group(3).strip()}"
         title = f"{title} - {part}"
-    return title[:70].strip(" -–—:,|·•"), year or rec.get("year")
+    title = title[:70].strip(" -–—:,|·•")
+    # The cleaner drops a trailing full stop, which is right for a sentence and
+    # wrong for an initialism: `Deadline - U. S. A.` came back as `U. S. A`.
+    if re.search(r"\b[A-Z]$", title) and (title + ".") in raw:
+        title += "."
+    return title, year or rec.get("year")
 
 
 def kept_pool():

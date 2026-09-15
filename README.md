@@ -165,7 +165,7 @@ Three details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,929 of 4,179 slots (94%) carry a listing description** — 3,697 of those
+**3,926 of 4,177 slots (94%) carry a listing description** — 3,695 of those
 slots are distinct programmes, the rest being CH 01, CH 11 and CH 12 replaying
 the dial. From two sources, best first:
 
@@ -223,10 +223,72 @@ no network, which is how to iterate on those rules without a four-minute
 refetch.
 
 **Size**: descriptions roughly doubled `index.html`, 616 KB → **1.6 MB**
-(499 KB gzipped, which is what a static host actually sends; the three
+(495 KB gzipped, which is what a static host actually sends; the three
 channels added to the suggested lineup are the last 180 KB of the raw file).
 Lower `MAXLEN` in `describe.py` and re-run `--repolish` if that matters more
 than the prose.
+
+### Titles (`retitle.py`)
+
+`harvest.clean()` is deliberately timid. It will not cut a bare year, because
+any rule blunt enough also destroys *Space 1999* and *Big News of 1941*, and it
+caps a title at seventy characters. That was the right trade while every title
+on the dial came from the same place. It stopped being right when the suggested
+lineup's CH 09 and CH 10 began re-cleaning through ia-curation's `titles.py`,
+because the same film then read two ways depending on which dial you were on —
+CH 18 SILENT said `Buster Keaton's "Cops"` and the star lineup said `Cops`.
+
+**497 of 4,179 listings carried cataloguing** in the title: 204 truncated at
+the cap, 195 still in quote marks, 264 still holding a year, a cast list or a
+`Dir:` credit. `retitle.py` fixes **713** of them and leaves 61, of which only
+12 are in scope. No network — every raw title it needs is already in
+ia-curation's data.
+
+What makes it safe is mostly what it refuses to do:
+
+- **Scope is the curated film channels.** `titles.py` parses an uploader's
+  catalogue-in-the-title, which is what curated.py's shelves are and is not
+  what the collection channels are. Run over those it does real damage: it
+  turned `Space 1999 (Complete Series 2)` into `Space`, and ate the part number
+  off `Postwar Germany: 28 Months After V-E Day (Part II)` and seven more
+  Prelinger and newsreel items, where the trailing parenthetical is the only
+  thing telling two halves apart. CH 16 is out too — `drivein.py` owns those
+  titles and they are night names.
+- **A cut has to remove cataloguing**, tested against what it actually removed.
+  The cleaner is as happy to remove meaning, and on these shelves it does: a
+  trailing parenthetical is a cast list on CH 17 and an English gloss on CH 27.
+  This is what saves `Orumcek (Turkish Spiderman)`, `Karavan smerti (The
+  caravan of death)`, `El Turista (aka Millonario Por Un Dia)` and `Umberto D.`
+  — the last one because the cut was a single full stop.
+- **The raw title only where the stored one lost something** — cut at the cap,
+  or a serial whose chapter number survives nowhere else. Everywhere else the
+  stored title is the better input, since CH 15 and CH 34 are titled from
+  Erickson's properly-cased review headings where the uploader's raw reads
+  `The Woman In The Window`.
+- **It runs to a fixed point**, so a second run is a no-op. One pass is not
+  stable: `Sherlock Holmes movies 1939-1944 colorized` loses `-1944 colorized`
+  first, which leaves `1939` looking like a trailing year to the next pass, and
+  the title would erode a little on every rebuild.
+
+**A collision is examined, not resolved by fiat.** Five pairs collapsed to one
+title inside a channel, and only two were one film twice. A language or a
+colour treatment changes what is on the screen, so it goes back into the
+listing; a transfer does not, so those are duplicates and the longer copy wins.
+
+| | |
+|---|---|
+| `DRÁCULA` and `DRÁCULA (Español)` | the English and Spanish 1931 *Dracula*s, shot at night on the same sets. CH 30's tag is *doblada al español* — collapsing them loses the one the channel exists for |
+| `1950. D.O.A.` and `1950. D.O.A. (colorized)` | CH 45's tag is *D.O.A. in four languages* |
+| `L'alchimiste…` and `…(tinted)` | two prints of one Méliès |
+| `I Love Trouble` ×2 | 576p and 720p of one Noir Alley recording — **dropped**, and the copy kept is the one with the intro still on it |
+| `Frankenstein` ×2 | **dropped** |
+
+Afterwards the two dials agree on **every** shared title, and no channel plays
+two listings with the same name. A side effect worth knowing: `curated.py`
+dedupes on title at harvest time, so the dial only ever carried *one* chapter
+of *The Perils of Pauline* and one episode of *Les Vampires* — the rest cleaned
+to the same string and were discarded before they reached a channel. The
+suggested lineup gets them because it puts the chapter number back first.
 
 ### The speed trick, taken from ia-curation's README
 
@@ -242,6 +304,7 @@ durations straight out of it, so 3,500 programmes resolve in minutes.
 | File | Role |
 |---|---|
 | `curated.py` | Builds channels from the ia-curation lists; durations via `_files.xml` on the data nodes |
+| `retitle.py` | Re-cleans the curated channels' listing titles through ia-curation's `titles.py`, and resolves what collides (`--dry`); no network calls |
 | `describe.py` | Adds a listing description to every programme (`--dry`, `--force`, `--repolish`) |
 | `harvest.py` | Queries the Archive.org search + metadata APIs, picks a browser-playable MP4 derivative per item, reads exact per-file durations, writes `channels.json` |
 | `sitcom.py` | Builds CH 52 from a hand-written list of public-domain series; per-series caps, episode-level dedupe |
@@ -262,6 +325,7 @@ python curated.py        # curator/critic channels from ia-curation (~5 min)
 python sitcom.py         # CH 52 only, merged in place (~1 min)
 python walk.py           # CH 12 COLLECTORS, from ia-curation's channel.json
 python drivein.py        # CH 16 SHOCKER back into broadcast order (~1 min)
+python retitle.py        # clean the curated channels' titles; no network
 python describe.py       # listing descriptions (skips items that have one)
 python daypart.py        # CH 01 THE NETWORK; needs the genre channels to exist
 python evening.py        # CH 11 THE EVENING; needs CH 52 and the graded films
@@ -276,6 +340,14 @@ so skipping it leaves a 36,000-line reformat sitting in the diff. It now also
 has to run after `sitcom.py` rather than merely before `build.py`, since CH 07
 COMEDY is built out of what CH 52 contains. `walk.py` writes the compact form
 too, so re-running it on its own is free of side effects.
+
+`retitle.py` goes before `describe.py` for a related reason: a title is an
+input to `echoes_title()`, so a description dropped as an echo of the *old*
+title is a different set from one dropped as an echo of the clean one. It goes
+before `suggest.py` because the suggested lineup copies items off the dial, and
+it goes after `curated.py` and `drivein.py` because both write titles it would
+otherwise be cleaning twice. Re-running it is free: it settles each title to a
+fixed point, so a second run changes nothing.
 
 `walk.py` goes *before* `describe.py` rather than after: it brings in films
 that are new to the dial, and descriptions are `describe.py`'s job for every
@@ -346,7 +418,7 @@ static host, or open it directly.
 
 ## Channels
 
-**50 channels, 3,697 programmes filling 4,179 slots** — CH 01 replays the dial
+**50 channels, 3,695 programmes filling 4,177 slots** — CH 01 replays the dial
 on a clock, CH 12 re-programmes a corner of it and CH 11 pairs two of its
 channels off against each other, so the three of them are the difference
 between the two numbers. Most channels run for days before they repeat; DOUBLE
@@ -378,7 +450,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 17 | CHILLER ● | Hammer, giallo and the nasty years | 110 | 199h |
 | 18 | SILENT ● | The complete silent shelf, 1901–1928 | 130 | 105h |
 | 19 | NOIR ● | The fn01r noir shelf, 1940–1964 | 93 | 153h |
-| 20 | NOIR ALLEY ● | Recordings with the intros intact | 110 | 193h |
+| 20 | NOIR ALLEY ● | Recordings with the intros intact | 109 | 190h |
 | 21 | ARGENTINO ● | Cine Argentino, 1909–2012 | 110 | 185h |
 | 22 | TRICK FILMS ● | Méliès, Chomón, cinema of attractions | 102 | 8.5h |
 | 23 | CHAPLIN ● | The Keystone-to-Mutual shorts | 36 | 10h |
@@ -388,7 +460,7 @@ because no query can tell a free sitcom from a bootlegged one.
 | 27 | KILINK ● | Turkish pop cinema: Kilink, Turkish Batman | 10 | 15h |
 | 28 | ANARQUISMO ● | Spanish libertarian cinema | 8 | 10h |
 | 29 | MOMMARTZ ● | Lutz Mommartz: German experimental | 42 | 11h |
-| 30 | MONSTRUOS ● | Universal monsters, doblada al español | 10 | 16h |
+| 30 | MONSTRUOS ● | Universal monsters, doblada al español | 9 | 14.5h |
 | 31 | ARMY/NAVY ● | US Army & Navy training films | 46 | 20h |
 | 32 | KATZMAN ● | Sam Katzman's bench | 33 | 52h |
 | 33 | CINE NEGRO ● | Noir in Spanish, 1932–1970 | 19 | 35h |
