@@ -82,8 +82,12 @@ SHELVES = [
      ("name", "Silent Canon in HD"), MIXED, 110),
     (37, "EN COULEUR", "DeOldify: European classics in colour",
      ("name", "DeOldify"), MIXED, 90),
-    (38, "NIHON",      "Contemporary Japanese cinema, 2001-2022",
-     ("name", "Contemporary Japanese"), FEATURE, 60),
+    # 38 NIHON, "Contemporary Japanese", is deliberately absent. The shelf is
+    # coherent and scored well -- it is 2001-2022 Japanese cinema, which is
+    # exactly the problem: those are licensed releases somebody uploaded, not
+    # films that fell out of copyright. Being on archive.org is not the same as
+    # being free to rebroadcast, and the guide is a public page that lists them
+    # by title and plays them unattended. Do not re-add it from the score alone.
     (39, "CALIGARI",   "Expressionism to noir, 1919-1960",
      ("name", "Black-and-White Benchmarks"), FEATURE, 46),
     (40, "BOGART",     "The Bogart shelf, and friends",

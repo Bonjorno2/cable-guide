@@ -1,6 +1,6 @@
 # THE GUIDE
 
-A cable television guide that is always already in progress. 50 channels
+A cable television guide that is always already in progress. 49 channels
 built from curated Internet Archive collections, running on a real schedule.
 Tune in at 8:17 and you are seventeen minutes into the movie.
 
@@ -165,7 +165,7 @@ Three details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,926 of 4,177 slots (94%) carry a listing description** — 3,695 of those
+**3,866 of 4,117 slots (94%) carry a listing description** — 3,635 of those
 slots are distinct programmes, the rest being CH 01, CH 11 and CH 12 replaying
 the dial. From two sources, best first:
 
@@ -418,7 +418,7 @@ static host, or open it directly.
 
 ## Channels
 
-**50 channels, 3,695 programmes filling 4,177 slots** — CH 01 replays the dial
+**49 channels, 3,635 programmes filling 4,117 slots** — CH 01 replays the dial
 on a clock, CH 12 re-programmes a corner of it and CH 11 pairs two of its
 channels off against each other, so the three of them are the difference
 between the two numbers. Most channels run for days before they repeat; DOUBLE
@@ -468,7 +468,6 @@ because no query can tell a free sitcom from a bootlegged one.
 | 35 | SERIALS ● | Colourized serials, monsters, B-pictures | 110 | 165h |
 | 36 | SILENT HD ● | The silent canon in HD | 110 | 181h |
 | 37 | EN COULEUR ● | DeOldify: European classics in colour | 90 | 146h |
-| 38 | NIHON ● | Contemporary Japanese cinema | 60 | 129h |
 | 39 | CALIGARI ● | Expressionism to noir, 1919–1960 | 41 | 69h |
 | 40 | BOGART ● | The Bogart shelf, and friends | 35 | 57h |
 | 41 | FEUILLADE ● | Les Vampires, and films named for directors | 13 | 16h |
@@ -1106,13 +1105,21 @@ method exists at all.
   denylist in `harvest.py` is a backstop for stragglers, not the defence. Note
   also that `nude` is not a substring of `nudist` — which is how *Diary of a
   Nudist* reached the MATINEE lineup before being caught by eye.
-- **Some curator shelves hold films that are plainly still in copyright** —
-  CH 17 has *The Silence of the Lambs*, CH 38 is Japanese cinema from
-  2001–2022, and CH 12 is programmed out of the same shelf CH 17 draws on, so
-  it inherits the problem: Hammer and giallo pictures from 1957 to 1989 are
-  not public domain because somebody uploaded them. They are on archive.org, which is not the same as being free to
-  rebroadcast. Drop those channels from `SHELVES` in `curated.py` if that
-  matters for how you use this.
+- **Some curator shelves hold films that are plainly still in copyright.** A
+  shelf can score well for coherence and still be somebody's upload of a
+  licensed release: being on archive.org is not the same as being free to
+  rebroadcast, and this is a public page that lists them by title and plays
+  them unattended.
+
+  **CH 38 NIHON — Japanese cinema from 2001–2022 — has been cut for this
+  reason**, and the gap at 38 in `SHELVES` in `curated.py` carries a note
+  saying not to re-add it from the coherence score alone.
+
+  **Still outstanding: CH 17**, which has *The Silence of the Lambs* among
+  Hammer and giallo pictures from 1957 to 1989, and **CH 12**, which is
+  programmed out of the same shelf CH 17 draws on and so inherits the problem.
+  Cutting a whole shelf is the blunt fix; CH 17 is worth pruning by year
+  instead, since most of what makes it good is older than the exposure.
 - **Timezones**: slots align to :00/:30 in the viewer's local time. A viewer in
   a :45-offset zone (Nepal, Chatham Islands) sees the grid land on :15/:45.
 
