@@ -24,14 +24,16 @@ What it picks is a region of that graph rather than a shelf: mutual
 nearest-neighbour components of the 155 endorsed films, gated on density and
 then ranked by *obscurity*, because past a floor a denser region mostly means a
 bigger crowd — the densest thing in there is the 1950s monster shelf that every
-public-domain site already has. The winner is gothic → giallo → slasher,
-1957-1989, median 2,429 downloads, and 18 of its 40 films were found by the
-graph alone: they sit beside 18 to 22 of the others in the collections of
-people with nothing else in common.
+public-domain site already has. The winner is gothic → giallo → slasher, and
+17 of the 36 films that survive the year gate below were found by the graph
+alone: they sit beside 18 to 22 of the others in the collections of people with
+nothing else in common.
 
-So this file is deliberately thin. It does not re-decide anything: the films,
-their order, their files and their runtimes are `data/channel.json` as
-`channel.py` wrote it. Three things it does do:
+So this file is deliberately thin. It does not re-decide anything *about the
+programming*: the films, their order, their files and their runtimes are
+`data/channel.json` as `channel.py` wrote it. The year gate is the one
+exception and it is a licensing decision, not a curatorial one. Three things it
+does do:
 
   * **Writes the blocks out, so the running order survives.** A walk that gets
     shuffled is a list again. CH 01 already needed prescribed blocks for its
@@ -51,9 +53,9 @@ their order, their files and their runtimes are `data/channel.json` as
     the title was naming the film, while `release_year()` is reading a date
     field that can be the edition rather than the picture.
 
-No network. The file and duration of all 40 were checked against the guide's
-own resolver — `curated.files_xml()`, which picks by derivative format rather
-than by size — and agreed on all 40, so there is nothing to re-resolve.
+No network. The file and duration of all 40 rows were checked against the
+guide's own resolver — `curated.files_xml()`, which picks by derivative format
+rather than by size — and agreed on all 40, so there is nothing to re-resolve.
 
 Run after `curated.py` and before `describe.py`, which is what puts Erickson's
 prose on the 22 endorsed films and fetches a description for the rest.
@@ -73,6 +75,15 @@ NUM = 12
 NAME = "COLLECTORS"
 TAG = "Gothic to giallo, programmed by the people who saved it"
 
+# The one thing this file does re-decide, and it is not a programming decision.
+# The region runs 1957-1989 and the last four -- Thirst, Strange Behavior, The
+# New York Ripper, I, Madman -- are still in copyright. The walk is a claim
+# about adjacency, so dropping films from it costs something real: what is left
+# is a subsequence, and at four seams the neighbour of a neighbour now plays
+# next. Four out of forty is a cheaper price than the channel carrying films it
+# should not, and CH 17 is gated at the same year for the same reason.
+UPTO = 1977
+
 
 def slots_for(dur):
     """Half-hours a programme needs. Mirrors packChannel()."""
@@ -86,8 +97,12 @@ def convert(rows, described):
         if not title or not r.get("file") or not r.get("runtime"):
             print(f"  skipped {r['identifier']}", file=sys.stderr)
             continue
+        yr = year or r.get("year")
+        if not isinstance(yr, int) or yr > UPTO:
+            print(f"  dropped {title} ({yr}) -- after {UPTO}", file=sys.stderr)
+            continue
         it = {"id": r["identifier"], "file": r["file"], "title": title,
-              "year": year or r.get("year"), "dur": round(r["runtime"], 2),
+              "year": yr, "dur": round(r["runtime"], 2),
               # How the film got here, which is the whole claim of the channel
               # and the one thing the screen cannot show without being told.
               "kind": r["kind"]}

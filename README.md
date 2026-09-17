@@ -165,7 +165,7 @@ Three details that turned out to matter more than the series list:
 
 ### Descriptions
 
-**3,866 of 4,117 slots (94%) carry a listing description** — 3,635 of those
+**3,842 of 4,087 slots (94%) carry a listing description** — 3,612 of those
 slots are distinct programmes, the rest being CH 01, CH 11 and CH 12 replaying
 the dial. From two sources, best first:
 
@@ -418,7 +418,7 @@ static host, or open it directly.
 
 ## Channels
 
-**49 channels, 3,635 programmes filling 4,117 slots** — CH 01 replays the dial
+**49 channels, 3,612 programmes filling 4,087 slots** — CH 01 replays the dial
 on a clock, CH 12 re-programmes a corner of it and CH 11 pairs two of its
 channels off against each other, so the three of them are the difference
 between the two numbers. Most channels run for days before they repeat; DOUBLE
@@ -434,7 +434,7 @@ because no query can tell a free sitcom from a bootlegged one.
 
 | CH | Name | What it is | Items | Loops |
 |---|---|---|---|---|
-| 01 | THE NETWORK ◑ | One station, all day — dayparted, local clock | 366 | 168h |
+| 01 | THE NETWORK ◑ | One station, all day — dayparted, local clock | 363 | 168h |
 | 02 | PRELINGER | Ephemeral & industrial film | 199 | 55h |
 | 03 | SATURDAY AM | Classic theatrical cartoons | 240 | 36h |
 | 06 | CHRONICLES | The Computer Chronicles | 200 | 125h |
@@ -442,12 +442,12 @@ because no query can tell a free sitcom from a bootlegged one.
 | 08 | A/V CLUB | Classroom & training films | 180 | 59h |
 | 09 | THE VAULT | Television past | 150 | 111h |
 | 11 | **THE EVENING** ◆ | **Two half-hours and the feature, one audience** | 78 | 76h |
-| 12 | **COLLECTORS** ◆ | **Gothic to giallo, in a running order** | 40 | 73h |
+| 12 | **COLLECTORS** ◆ | **Gothic to giallo, in a running order** | 36 | 66h |
 | 13 | HOME MOVIES | Strangers' amateur film | 140 | 36h |
 | 14 | MISSION CTRL | NASA film & mission footage | 129 | 46h |
 | 15 | **DOUBLE** ● | **Endorsed twice, independently** | 153 | 274h |
 | 16 | **SHOCKER** ◆ | **The Internet Drive-In, in broadcast order** | 50 | 172h |
-| 17 | CHILLER ● | Hammer, giallo and the nasty years | 110 | 199h |
+| 17 | CHILLER ● | Hammer, giallo and the nasty years | 87 | 155h |
 | 18 | SILENT ● | The complete silent shelf, 1901–1928 | 130 | 105h |
 | 19 | NOIR ● | The fn01r noir shelf, 1940–1964 | 93 | 153h |
 | 20 | NOIR ALLEY ● | Recordings with the intros intact | 109 | 190h |
@@ -522,20 +522,28 @@ nearest-neighbour components of the 155 endorsed films, gated on density and
 then ranked by **obscurity**, since past a floor a denser region mostly means a
 bigger crowd. The densest thing in there is the 1950s monster shelf that every
 public-domain site already has. The winner is gothic → giallo → slasher,
-1957–1989, median 2,429 downloads:
+median 2,429 downloads:
 
 | | films |
 |---|---|
 | endorsed three times | 4 |
-| endorsed twice | 18 |
-| **found by the graph alone** | **18** |
+| endorsed twice | 15 |
+| **found by the graph alone** | **17** |
 
-Those 18 are the interesting half. No endorsement pass ever saw them; they are
+Those 17 are the interesting half. No endorsement pass ever saw them; they are
 here because they sit beside 18 to 22 of the other films in the collections of
 people with nothing else in common. *Blood on Satan's Claw*, *Rasputin the Mad
 Monk*, *The Gorgon*, *Count Yorga*.
 
-`walk.py` is deliberately thin — it re-decides nothing — but three things had
+The region `channel.py` found runs 1957–1989; the channel runs **1957–1976**,
+because `walk.py` gates it at 1977 and the last four films — *Thirst*, *Strange
+Behavior*, *The New York Ripper*, *I, Madman* — are still in copyright. That
+gate is the one thing `walk.py` re-decides, and it costs something the rest of
+this section is spent arguing for: the walk is a claim about adjacency, so what
+is left is a *subsequence*, and at four seams the neighbour of a neighbour now
+plays next. Four films out of forty is the cheaper of the two prices.
+
+`walk.py` is deliberately thin — it re-decides no programming — but three things had
 to give:
 
 - **The running order had to survive the scheduler.** A shuffled walk is a list
@@ -1111,15 +1119,45 @@ method exists at all.
   rebroadcast, and this is a public page that lists them by title and plays
   them unattended.
 
-  **CH 38 NIHON — Japanese cinema from 2001–2022 — has been cut for this
-  reason**, and the gap at 38 in `SHELVES` in `curated.py` carries a note
-  saying not to re-add it from the coherence score alone.
+  Three channels were dealt with, two ways:
 
-  **Still outstanding: CH 17**, which has *The Silence of the Lambs* among
-  Hammer and giallo pictures from 1957 to 1989, and **CH 12**, which is
-  programmed out of the same shelf CH 17 draws on and so inherits the problem.
-  Cutting a whole shelf is the blunt fix; CH 17 is worth pruning by year
-  instead, since most of what makes it good is older than the exposure.
+  - **CH 38 NIHON — Japanese cinema from 2001–2022 — was cut whole.** Nothing
+    on the shelf was old enough to keep. The gap at 38 in `SHELVES` in
+    `curated.py` carries a note saying not to re-add it from the coherence
+    score alone, since the score is what argued for it in the first place.
+  - **CH 17 CHILLER was pruned to 1977**, losing 23 of 110 — *The Silence of
+    the Lambs*, *Tenebre*, the Fulci zombie pictures — and keeping the Hammer
+    and giallo half that made the shelf worth having. The ceiling is the
+    optional seventh field on its `SHELVES` row.
+  - **CH 12 COLLECTORS was rebuilt behind the same 1977 gate**, 40 films down
+    to 36. It is programmed out of the same shelf, so it inherited the problem.
+
+  **CH 01 has to be rebuilt after any of this.** It is a view over the dial, so
+  it holds second copies of films that live elsewhere, and a prune that stops
+  at the source channel is cosmetic: *Salems Lot* went on playing at one in the
+  morning after CH 17 lost it. `python daypart.py` re-deals from whatever the
+  dial now holds — it is offline and seeded, so the only thing that moves is
+  what had to.
+
+  A year ceiling is a crude proxy for copyright and it is deliberately
+  conservative: 1977 is early enough that the US renewal and notice rules do
+  most of the work, rather than a judgement about any particular film. It
+  removes the indefensible cases, not every arguable one.
+
+  **Still outstanding, and it is the endorsement data rather than the shelves.**
+  A film graded by a critic or saved by two collectors is *more* likely to be a
+  real release, so the best signals here point at the worst exposure:
+
+  | | post-1977 | what |
+  |---|---|---|
+  | CH 34 SAVANT | 6 of 170 | *Blade Runner*, *Gandhi*, *Manhunter*, *'Breaker' Morant*, *The Howling*, *Brotherhood of the Wolf* |
+  | CH 15 DOUBLE | 7 of 153 | *Dawn of the Dead*, *Mad Max*, *Thirst*, *Alligator*, *The Watcher in the Woods*, *Strange Behavior*, *I, Madman* |
+  | ★ SUGGESTED | 8 slots | `suggest.py` re-splits the same data: CH 04, CH 06, CH 08 |
+
+  CH 15 is why three of CH 12's four cuts are still on the dial — the same
+  films are endorsed twice as well — so that prune is only half-done until
+  CH 15 goes too. Both channels feed CH 01's PRIME TIME, which is how
+  *Strange Behavior* and *'Breaker' Morant* got back onto the network channel.
 - **Timezones**: slots align to :00/:30 in the viewer's local time. A viewer in
   a :45-offset zone (Nepal, Chatham Islands) sees the grid land on :15/:45.
 

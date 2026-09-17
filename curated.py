@@ -39,11 +39,18 @@ LONG    = (240, 22000)      # drive-in *double* features run past three hours
 #   ("name", s) matches a substring of the editorial name in names.json
 #   ("top",  s) matches the title of the cluster's top-downloaded item, for the
 #               89 coherent clusters that were never given an editorial name
+# An optional seventh field is a year ceiling: the shelf is kept, but nothing
+# released after that year is taken from it. A coherent shelf is one person's
+# taste, and taste does not stop at the copyright line -- see CH 17.
 SHELVES = [
     (16, "SHOCKER",    "Internet Drive-In double features",
      ("name", "Shocker Internet"), LONG, 60),
+    # Capped at 1977. The shelf runs to 1996 and the late end is where the
+    # exposure is: The Silence of the Lambs, Bad Moon, Tenebre, the Fulci
+    # zombie pictures. Pruned rather than cut, because the Hammer and giallo
+    # half is the reason the shelf scored, and it is old enough to be safe.
     (17, "CHILLER",    "Hammer, giallo and the nasty years",
-     ("name", "Retro Chiller"), FEATURE, 110),
+     ("name", "Retro Chiller"), FEATURE, 110, 1977),
     (18, "SILENT",     "The complete silent shelf, 1901-1928",
      ("name", "Complete Silent Shelf"), MIXED, 130),
     (19, "NOIR",       "The fn01r noir shelf, 1940-1964",
@@ -287,7 +294,8 @@ def main():
          for s in savant], MIXED, 170, sg, sd, "(Erickson's grades)")
 
     # --- the curator shelves ---
-    for num, name, tag, matcher, band, cap in SHELVES:
+    for num, name, tag, matcher, band, cap, *rest in SHELVES:
+        upto = rest[0] if rest else None
         ms = matcher if isinstance(matcher, list) else [matcher]
         items, missed = [], []
         for m in ms:
@@ -300,6 +308,16 @@ def main():
             print(f"  CH {num:02d} {name:<14} NO MATCH for {missed}", file=sys.stderr)
         if not items:
             continue
+        if upto:
+            # No year is not old enough. Every item on the one shelf this
+            # applies to carries one, so nothing is lost to caution here, and
+            # a shelf that stops dating its uploads is exactly the case where
+            # guessing would be worst.
+            n = len(items)
+            items = [i for i in items
+                     if isinstance(i.get("year"), int) and i["year"] <= upto]
+            print(f"  CH {num:02d} {name:<14} {n - len(items)} dropped "
+                  f"as post-{upto}", file=sys.stderr)
         items.sort(key=lambda i: -(i.get("downloads") or 0))
         add(num, name, tag, items, band, cap)
 
