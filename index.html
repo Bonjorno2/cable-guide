@@ -68,6 +68,10 @@
   .bug .n{font-size:21px;font-weight:900;color:var(--gold);line-height:1}
   .bug .t{font-size:11px;color:#dcd9ff;text-transform:uppercase;line-height:1.25}
   .bug.brk .n{color:#ff7a7a}
+  /* how many others are on this channel, right now, on this frame */
+  .bug .w{font-size:10px;line-height:1.25;color:#ffc4c4;letter-spacing:.1em;
+    white-space:nowrap;padding-left:9px;border-left:1px solid rgba(255,255,255,.22)}
+  .bug .w b{color:var(--live);font-size:7px;vertical-align:middle;margin-right:4px}
 
   /* ---- station ident ---- */
   .ident{
@@ -175,6 +179,8 @@
   .bar{height:7px;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.2);margin-top:9px;overflow:hidden}
   .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ff9b3d);width:0}
   .joined{font-size:10.5px;color:#ffb3b3;letter-spacing:.11em;margin-top:5px;text-transform:uppercase;min-height:13px}
+  .tally{font-size:10.5px;color:var(--dim);letter-spacing:.11em;margin-top:4px;text-transform:uppercase}
+  .tally b{color:var(--gold);font-weight:900}
 
   /* CH 16's listing is a night, not a film: one item is a whole drive-in
      programme and its title only names the theme. The films are the thing a
@@ -235,8 +241,14 @@
   .row .cn b{font-size:17px;font-weight:900;color:var(--gold);min-width:25px;line-height:1}
   .row .cn span{font-size:11px;letter-spacing:.09em;color:#efeeff;overflow:hidden;
     white-space:nowrap;text-overflow:ellipsis}
+  /* viewers on that channel — pushed to the far edge of the cell, and absent
+     rather than zero, so the column reads as "where everyone is" */
+  .row .cn i{margin-left:auto;padding-left:5px;font-style:normal;font-size:10px;
+    font-weight:900;color:#ff9d9d}
+  .row .cn i::before{content:'●';font-size:6px;vertical-align:middle;margin-right:3px}
   .row.on .cn{background:var(--gold)}
   .row.on .cn b,.row.on .cn span{color:#140a3a}
+  .row.on .cn i{color:#8a1b1b}
 
   .row .track{position:relative;flex:1 1 auto;overflow:hidden;border-bottom:1px solid #07052a}
   .row .track .inner{position:absolute;inset:0;will-change:transform}
@@ -291,7 +303,9 @@
     /* .bill goes with .desc: the strip is one line high here, and half a film
        title cut at the panel edge is worse than sending them to the grid,
        whose tooltip carries the same list. */
-    .side .bar,.side .joined,.side .desc,.side .bill{display:none}
+    .side .bar,.side .joined,.side .desc,.side .tally,.side .bill{display:none}
+    /* --chan-w is 118px here: a number and a name already fill it */
+    .row .cn i{display:none}
     .side .next .lbl,.side .next .nexttitle{display:none}
     /* .next is a flex item, so min-width:auto stops it shrinking below its
        content -- .ctrls then measured 649px in a 375px viewport and the last
@@ -345,7 +359,7 @@
       </div>
 
       <div class="lower" id="lower" hidden><b>UP NEXT</b><span id="lowerT"></span></div>
-      <div class="bug" id="bug" hidden><div class="n" id="bugN">02</div><div class="t" id="bugT"></div></div>
+      <div class="bug" id="bug" hidden><div class="n" id="bugN">02</div><div class="t" id="bugT"></div><div class="w" id="bugW" hidden></div></div>
       <div class="fsbtn" id="fsBtn" role="button" tabindex="0" aria-label="Full screen">⛶</div>
       <div class="powerwrap" id="power">
         <h1>THE&nbsp;GUIDE</h1>
@@ -365,6 +379,7 @@
         <div class="bill" id="bill" hidden></div>
         <div class="bar"><i id="bar"></i></div>
         <div class="joined" id="joined"></div>
+        <div class="tally" id="tally" hidden></div>
         <div class="desc" id="desc" hidden></div>
       </div>
       <div class="next">
@@ -803,7 +818,8 @@ function buildGrid(){
     CH.forEach((ch,i)=>{
       const row=document.createElement('div');
       row.className='row'; row.dataset.ch=i;
-      row.innerHTML='<div class="cn"><b>'+pad(ch.num)+'</b><span>'+ch.name+'</span></div>'+
+      row.innerHTML='<div class="cn"><b>'+pad(ch.num)+'</b><span>'+ch.name+'</span>'+
+                      '<i hidden></i></div>'+
                     '<div class="track"><div class="inner"></div></div>';
       const inner=row.querySelector('.inner');
       inner.style.width=(WINDOW_SECONDS*pps)+'px';
@@ -846,6 +862,7 @@ function buildGrid(){
   }
   syncPan();
   markLive();
+  paintTally();              // the rows were just thrown away and rebuilt
 }
 const esc = s => s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const trunc = (s,n) => s.length>n ? s.slice(0,n-1).trimEnd()+'…' : s;
@@ -943,6 +960,7 @@ function tune(i, viaClick){
   $('ident').hidden=true; $('lower').hidden=true;
   writeURL();
   markLive();
+  presenceSend(); paintTally();
   if(viaClick && !powered) powerOn();
   refresh(true);
   // keep the tuned channel visible in the crawl
@@ -1134,6 +1152,7 @@ function powerOn(){
   video.muted=false; video.volume=(+$('vol').value)/100;
   curKey=null;
   ac();                      // the power-on click is our gesture to open audio
+  presence();                // a set that is on is a set worth counting
   burst(); clunk();
   refresh(true);
   onOrient();                // already sideways? go straight to full screen
@@ -1274,6 +1293,7 @@ function setGuide(on){
   curKey = null; resetPre();            // the old channel's tape is not ours
   syncGuideBtn();
   buildGrid();
+  presenceSend();            // same set, different dial: the key changed
   refresh(true);
   writeURL();
 }
@@ -1291,6 +1311,88 @@ $('bArchive').addEventListener('click',e=>{
                       : (st.seg.resumeItem||st.seg.afterItem)),'_blank','noopener');
 });
 function syncMute(){ $('bMute').textContent=video.muted?'UNMUTE':'MUTE' }
+
+/* ══════════════════════════════════════════════════════════════════
+   WHO ELSE IS WATCHING
+   ══════════════════════════════════════════════════════════════════
+   The schedule is a pure function of wall-clock time, so everyone tuned to a
+   channel is on the same frame of the same film. That is what makes a live
+   count worth putting on the screen: it is a rating, not a traffic figure.
+
+   A viewer is one open socket — there is no cookie, no identifier and nothing
+   stored at the other end, so tuning out is the connection closing. See
+   presence/worker.js.
+
+   Nothing here runs until the set is switched on. Someone who loads the page
+   and only reads it makes no request to us at all, which keeps the promise
+   that this is one static file, and makes the number mean "sets on" rather
+   than "tabs open".                                                          */
+const PRESENCE = 'wss://guide-presence.bonjorno2.workers.dev/tune';
+                       // empty: no socket, no counts, no requests
+
+let sock=null, sockTry=0, sockTmr=null, seen=null;
+
+// Both guides number their channels from 1, so the guide has to be part of
+// the key or CH 01 THE NETWORK and the NOIR pick would share a tally.
+const dialKey = i => (picks?'p':'m')+CH[i===undefined?chIdx:i].num;
+
+function presence(){
+  if(!PRESENCE || sock) return;
+  let s;
+  try{ s=new WebSocket(PRESENCE) }catch(e){ return }   // no WebSocket at all
+  sock=s;
+  s.onopen=()=>{ sockTry=0; s.send(dialKey()) };
+  s.onmessage=e=>{
+    if(e.data==='o') return;                           // our keepalive, echoed at the edge
+    try{ seen=JSON.parse(e.data) }catch(err){ return }
+    paintTally();
+  };
+  // error fires before close on a failed connect; whichever lands first cleans up
+  s.onerror=s.onclose=()=>{
+    if(sock!==s) return;
+    sock=null; seen=null; paintTally(); presenceRetry();
+  };
+}
+function presenceRetry(){
+  if(!powered || sockTmr) return;
+  sockTmr=setTimeout(()=>{ sockTmr=null; presence() },
+                     Math.min(60000, 2000*Math.pow(2, sockTry++)));
+}
+function presenceSend(){ if(sock && sock.readyState===1) sock.send(dialKey()) }
+
+// A phone that sleeps drops the socket without telling the page, so returning
+// to a visible tab is the cue to check we are still on the list.
+addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible' || !powered) return;
+  if(sock) presenceSend();
+  else { sockTry=0; clearTimeout(sockTmr); sockTmr=null; presence() }
+});
+// Keepalive. The worker answers this one at the edge without waking up.
+setInterval(()=>{ if(sock && sock.readyState===1) sock.send('p') }, 30000);
+
+function paintTally(){
+  const n   = seen ? (seen.ch[dialKey()]||0) : 0;
+  const tot = seen ? seen.n : 0;
+
+  // On the picture, only when there is company — "1 watching" is just you.
+  const w=$('bugW');
+  w.hidden = n<2;
+  if(n>=2) w.innerHTML='<b>●</b>'+n+' WATCHING';
+
+  const t=$('tally');
+  t.hidden = !seen;
+  if(seen) t.innerHTML = (n>1 ? '<b>'+n+'</b> on this channel &middot; ' : '')+
+                         '<b>'+tot+'</b> set'+(tot===1?'':'s')+' in use';
+
+  // Every row, not just rowEls — the crawl keeps several copies of the list.
+  document.querySelectorAll('.row').forEach(row=>{
+    const el=row.querySelector('.cn i');
+    if(!el) return;
+    const c = seen ? (seen.ch[dialKey(+row.dataset.ch)]||0) : 0;
+    el.hidden=!c;
+    if(c) el.textContent=c;
+  });
+}
 
 // pause the crawl while the pointer is in the grid, like a guide you lean into
 $('rowsClip').addEventListener('mouseenter',()=>hovering=true);

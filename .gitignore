@@ -2,3 +2,4 @@ the-guide.zip
 .claude/
 __pycache__/
 *.pyc
+.wrangler/

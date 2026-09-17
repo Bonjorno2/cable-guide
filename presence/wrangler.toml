@@ -1,0 +1,18 @@
+name = "guide-presence"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+# Logs off. The point of this service is that it counts viewers without
+# keeping anything about them; request logs would quietly undo that.
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "DIAL"
+class_name = "Dial"
+
+# SQLite-backed, which is what the free plan allows. Nothing is written to it
+# — the storage backend is just the flavour of object we are asking for.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Dial"]
