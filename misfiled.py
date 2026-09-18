@@ -246,8 +246,11 @@ def main():
 
     ch = {"num": NUM, "name": NAME, "tag": TAG, "items": items}
     data["suggested"] = [c for c in data["suggested"] if c["num"] != NUM] + [ch]
+    # Minified, the way the repo stores it. Every other writer's default
+    # separators quietly add a space after each `:` and `,` -- 119 KB of
+    # whitespace on this file, and a diff that says nothing about the change.
     with open("channels.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
     hrs = sum(i["dur"] for i in items) / 3600
     agreed = sum(1 for i in items if i["kind"] == "agreed")
