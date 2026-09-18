@@ -522,40 +522,53 @@ const DATA = __CHANNEL_DATA__;
 const SLOT  = 1800;                          // 30 minutes
 const EPOCH = Date.UTC(2025,0,1,0,0,0)/1000; // all schedules count from here
 const IDENT = 7;                             // station ident at the top of a block
-const SPOTS = DATA.interstitials;
-// Shortest gap worth calling a break. This is the only thing standing between
-// a programme and the next slot up, so it is deliberately small: at 60 a
-// 29-minute episode needed 30:01 and was given a full hour, which cost CH 06
-// a quarter of its loop. See packChannel.
+// Longest a programme can be and still share a block with another. It used to
+// be the shortest gap worth selling as a break, back when a block was padded
+// to the next half-hour; now that a block is only as long as what is in it,
+// all it decides is who keeps whom company. See packChannel.
 const MINBREAK = 30;
 
 function fnv(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rng(seed){let a=seed>>>0;return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
-// Roughly what share of a slot is actual programme; the rest is ad break.
-// Period television ran around 20–25% commercial load.
+// How much programme one block may hold. This was the content share of a
+// half-hour slot, the rest being commercials at roughly the 20–25% load period
+// television ran. There are no commercials now, so it is not a share of
+// anything — it is just the cap that stops one block swallowing a whole
+// evening of shorts, and the half-hour it is measured against is what keeps a
+// block feeling like a block.
 const CONTENT = 0.86;
 
-/* ---------- packing items into half-hour blocks ----------
-   A six-minute cartoon does not get its own half hour — it shares one with
-   the cartoons either side of it, which is how a Saturday morning block
-   actually worked. Anything too long to share keeps a block to itself.
+/* ---------- packing items into blocks ----------
+   A six-minute cartoon does not get its own block — it shares one with the
+   cartoons either side of it, which is how a Saturday morning block actually
+   worked. Anything too long to share keeps a block to itself.
 
-   Filling blocks in playlist order wastes a lot of slot (a 17-minute film
-   followed by a 15-minute one leaves each stranded in its own half hour, so
-   the channel ends up 40%+ commercials). Packing longest-first and taking
-   whatever still fits gets the content share close to the target instead.
+   Blocks used to be padded out to the next half-hour and the spare time sold
+   as commercials, at a rate picked to match what period television ran. They
+   are not any more: a block lasts exactly as long as the programmes in it
+   plus its ident, and the next one starts when it ends. That takes 15–28% off
+   every loop on the dial and means nothing on this channel is an advert.
 
-   MINBREAK, not 60, decides when a programme needs the next slot up. The gap
-   between those two numbers is only 30 seconds but it is worth 68 hours of
-   dead air across the dial: a recording made off-air already contains its own
-   commercials, so it measures a full half-hour rather than the ~22 minutes of
-   programme, and at 60 every one of those was handed a whole hour and half an
-   hour of ads. CH 06 CHRONICLES had 51 of its 200 episodes in that state.   */
+   What it costs is the alignment. Programmes no longer start at :00 and :30,
+   so the grid's column headings are a ruler laid over the schedule rather
+   than a description of it. The one channel that cannot pay that price is
+   CH 01, which is dayparted — see `prescribed`.
+
+   Longest-first packing is kept even though there is no content target left
+   to hit, because it still decides which shorts keep each other company.   */
 function packChannel(ch){
   const cap  = SLOT * CONTENT;
-  const mk   = (list, d) => ({items:list, content:d,
-                              slot: Math.max(SLOT, Math.ceil((d+MINBREAK)/SLOT)*SLOT)});
+  // Whole seconds, and that is not tidiness. `cum[]` accumulates these, and
+  // programAt() finds a block by binary search and hands back
+  // `end = start + slot`. Walking the schedule with `cur = p.end` — which the
+  // guide does — then lands a float's-worth *inside* the block it just left,
+  // finds the same block again, and never advances. Half-hour slots were
+  // exact multiples of 1800 and hid this for as long as they lasted.
+  // Ceil, not round: the block has to be at least IDENT longer than its
+  // programmes or slotPlan cannot afford the ident and the block opens cold.
+  // Rounding down did that to 353 blocks, which is most of a coin flip.
+  const mk   = (list, d) => ({items:list, content:d, slot: Math.ceil(d) + IDENT});
   const long = ch.items.filter(it => it.dur + MINBREAK >  SLOT).map(it => mk([it], it.dur));
   const pool = ch.items.filter(it => it.dur + MINBREAK <= SLOT)
                        .slice().sort((a,b) => b.dur - a.dur);
@@ -597,8 +610,17 @@ function prescribed(ch){
   const out = []; let k = 0;
   for(const [n, slots, p] of ch.blocks){
     const items = ch.items.slice(k, k + n); k += n;
-    out.push({items, content: items.reduce((s,i)=>s+i.dur, 0),
-              slot: slots * SLOT, part: ch.parts ? ch.parts[p] : undefined});
+    const content = items.reduce((s,i)=>s+i.dur, 0);
+    // A dayparted channel keeps the half-hour grid, and it is the only thing
+    // on the dial that does. Its cycle is exactly seven days; that is what
+    // puts cartoons at eight every morning instead of letting them walk round
+    // the clock, and a block that ran only as long as its programmes would
+    // take the whole week out of register by Tuesday. daypart.py fills those
+    // slots with short subjects rather than commercials, so the grid survives
+    // without anything being sold in it.
+    out.push({items, content,
+              slot: ch.daypart ? slots * SLOT : Math.ceil(content) + IDENT,
+              part: ch.parts ? ch.parts[p] : undefined});
   }
   return out;
 }
@@ -651,62 +673,48 @@ function programAt(ch, t){
 function nextProgram(ch, t){ return programAt(ch, programAt(ch,t).end + 1); }
 
 /* ---------- the running order inside one block ----------
-   Every item is cut into acts of roughly a quarter hour, a break follows each
-   act, and the slot's spare time is shared out across those breaks. So a
-   feature returns from an ad break every fifteen minutes or so instead of
-   running clean and then dumping ten minutes of commercials at the end, and a
-   block of cartoons gets a short break between each one.                     */
-const planCache = new Map();
+   An ident, then each programme start to finish, then the next one. Nothing
+   between them.
 
-function spread(weights, total){          // scale weights to sum exactly to total
-  const s = weights.reduce((a,b)=>a+b,0) || 1;
-  const out = weights.map(w => w * total / s);
-  out[out.length-1] += total - out.reduce((a,b)=>a+b,0);   // absorb float drift
-  return out;
-}
+   This used to cut every item into quarter-hour acts and hand the slot's
+   spare time out as breaks between them, so a feature returned from the
+   commercials every fifteen minutes the way it would have on air. The acts
+   went when the commercials did: there is no spare time left to place, and a
+   film cut into five pieces that play back to back is just the film, with
+   four chances for the seam to show.
+
+   `hold` is the one piece of the old arrangement worth keeping. A dayparted
+   block is still a fixed number of half-hours and its programmes will not
+   land on that exactly, so whatever is left over goes to the station card at
+   the end of the block. On every other channel it is zero.                  */
+const planCache = new Map();
 
 function slotPlan(ch, p){
   const key = ch.num+':'+p.rev+':'+p.idx;
   const hit = planCache.get(key);
   if(hit) return hit;
 
-  const r = rng(fnv(key));
   let B = Math.max(0, p.slot - p.block.content);
 
-  // Every block opens with a station ident, paid for out of the break budget.
-  // Skipped when a block is packed too tightly to afford one.
-  const ident = B >= IDENT + 20;
+  // Every block opens with a station ident. Since the commercials went, that
+  // is the whole of what a packed block is longer than its programmes.
+  const ident = B >= IDENT;
   if(ident) B -= IDENT;
-
-  // cut each item into acts
-  const segs = [];
-  for(const it of p.block.items){
-    const k = Math.min(6, Math.max(1, Math.round(it.dur / 900)));
-    const w = []; for(let i=0;i<k;i++) w.push(0.85 + 0.3*r());
-    let acc = 0;
-    for(const d of spread(w, it.dur)){ segs.push({item:it, from:acc, dur:d}); acc += d }
-  }
-  // one break after each act, lengths jittered but summing to the spare time
-  const bw = []; for(let i=0;i<segs.length;i++) bw.push(0.85 + 0.3*r());
-  const brks = spread(bw, B);
 
   const plan = []; let t = 0;
   if(ident){ plan.push({kind:'ident', t0:0, t1:IDENT}); t = IDENT }
-  segs.forEach((s,i)=>{
-    plan.push({kind:'show', t0:t, t1:t+s.dur, item:s.item, from:s.from});
-    t += s.dur;
-    plan.push({kind:'break', t0:t, t1:t+brks[i], seed:fnv(key+':b'+i),
-               afterItem:s.item, afterOffset:s.from+s.dur,
-               resumeItem:(segs[i+1] ? segs[i+1].item : null)});
-    t += brks[i];
-  });
+  for(const it of p.block.items){
+    plan.push({kind:'show', t0:t, t1:t+it.dur, item:it, from:0});
+    t += it.dur;
+  }
+  if(B > 1) plan.push({kind:'ident', t0:t, t1:t+B, hold:true});
 
   if(planCache.size > 400) planCache.clear();
   planCache.set(key, plan);
   return plan;
 }
 
-// What is literally on screen at time t — an act, or a spot inside a break.
+// What is literally on screen at time t — a programme, or the station card.
 function tuneAt(ch, t){
   const p = programAt(ch, t);
   const plan = slotPlan(ch, p);
@@ -715,22 +723,8 @@ function tuneAt(ch, t){
   if(!seg) seg = plan[plan.length-1];
 
   if(seg.kind === 'ident') return {kind:'ident', prog:p, seg, endsAt:seg.t1};
-  if(seg.kind === 'show' || !SPOTS.length)
-    return {kind:'show', item:seg.item || p.item,
-            offset:(seg.from||0) + (p.into - seg.t0), prog:p, seg, endsAt:seg.t1};
-
-  // `endsAt` is when *this spot* finishes, not the whole break — each spot is
-  // a separate load, so that is the boundary the prefetcher has to aim at.
-  let k = p.into - seg.t0;
-  const r = rng(seg.seed);
-  for(let g=0; g<400; g++){
-    const s = SPOTS[Math.floor(r()*SPOTS.length)];
-    if(k < s.dur)
-      return {kind:'break', item:s, offset:k, prog:p, seg,
-              endsAt: Math.min(seg.t1, p.into - k + s.dur)};
-    k -= s.dur;
-  }
-  return {kind:'break', item:SPOTS[0], offset:0, prog:p, seg, endsAt:seg.t1};
+  return {kind:'show', item:seg.item || p.item,
+          offset:(seg.from||0) + (p.into - seg.t0), prog:p, seg, endsAt:seg.t1};
 }
 
 const mediaURL = it => 'https://archive.org/download/'+it.id+'/'+encodeURIComponent(it.file);
@@ -921,7 +915,11 @@ function buildGrid(){
         // the window rather than hanging off it, so its title stays readable.
         let left=(p.start-winStart)*pps, width=p.slot*pps-3;
         if(left<0){ width+=left; left=0 }
-        if(width<8){ cur=p.end; continue }
+        // Never re-read the block we are standing on, whatever the arithmetic
+        // says: a schedule that fails to advance draws the same programme
+        // eighty times and reads as an empty row.
+        const nextCur = Math.max(p.end, cur + 1);
+        if(width<8){ cur=nextCur; continue }
         const list=p.block.items, extra=list.length-1;
         const el=document.createElement('div');
         el.className='prog';
@@ -942,7 +940,7 @@ function buildGrid(){
                               (it.feat?'\n    '+it.feat.join('  ·  '):'')+
                               (it.desc?'\n    '+it.desc:'')).join('\n\n');
         inner.appendChild(el);
-        cur=p.end;
+        cur=nextCur;
       }
       row.addEventListener('click',()=>tune(i,true));
       rm.appendChild(row);
@@ -1123,7 +1121,6 @@ function refresh(force){
   $('bar').style.width=(Math.min(1,played/cur.dur)*100)+'%';
   $('joined').textContent =
       st.kind==='ident' ? '◉ STATION IDENTIFICATION'
-    : st.kind==='break' ? '● COMMERCIAL BREAK — BACK IN '+short(st.seg.t1 - p.into)
     : (played>25 ? 'JOINED '+mins(played)+' IN  ·  '+mins(cur.dur-played)+' LEFT'
                  : 'STARTING NOW');
 
@@ -1138,10 +1135,7 @@ function refresh(force){
   // the on-screen channel bug
   const bug=$('bug'); bug.hidden=!powered;
   $('bugN').textContent=pad(ch.num);
-  $('bugT').innerHTML = st.kind==='break'
-      ? 'WE&rsquo;LL RETURN TO<br>'+esc(trunc(cur.title,38))
-      : esc(ch.name)+'<br>'+esc(trunc(cur.title,38));
-  bug.classList.toggle('brk', st.kind==='break');
+  $('bugT').innerHTML = esc(ch.name)+'<br>'+esc(trunc(cur.title,38));
 
   const want='CH '+pad(ch.num)+' · '+cur.title+' — THE GUIDE';
   if(document.title!==want) document.title=want;

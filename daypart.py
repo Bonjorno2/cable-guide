@@ -102,9 +102,34 @@ def main():
 
     borrowed = {}
 
+    def topup(space):
+        """Short subjects to fill `space` seconds at the end of a block.
+
+        This is where CH 01 pays for keeping the half-hour grid. Every other
+        channel now runs its blocks exactly as long as the programmes in them,
+        but a dayparted channel cannot: its cycle has to stay exactly seven
+        days or the dayparts walk round the clock. So the slack a feature
+        leaves in its slots is filled with reels instead of commercials --
+        which is what a station did with it anyway.
+        """
+        out = []
+        while space > 60:
+            pick = None
+            for i, it in enumerate(filler):
+                if it["id"] in used or it["dur"] > space:
+                    continue
+                pick = filler.pop(i)
+                break
+            if pick is None:
+                break
+            used.add(pick["id"])
+            out.append(pick)
+            space -= pick["dur"]
+        return out
+
     def one_slot_block(seq, name):
         """Bin-pack short subjects into a single half-hour, as packChannel does."""
-        cap, items, tot = SLOT * CONTENT, [], 0
+        cap, items, tot = SLOT - MINBREAK, [], 0
         for src, seq_ in (("own", seq), ("filler", filler)):
             if src == "filler" and not items:
                 borrowed[name] = borrowed.get(name, 0) + 1
@@ -119,11 +144,12 @@ def main():
                     continue
                 used.add(it["id"]); tot += it["dur"]
                 items.append(seq_.pop(i))
-                if tot > cap * 0.75:
-                    break
             if items:
                 break
-        return items
+        # The pack used to stop once the half-hour was three-quarters full,
+        # because the rest was going to be sold as commercials. Now the rest is
+        # the station card, so the block is filled the whole way.
+        return items + topup(cap - tot)
 
     out_items, out_blocks, parts = [], [], []
     part_idx = {}
@@ -143,8 +169,12 @@ def main():
                     it = take(seq, remaining, True) or take(seq, remaining, False)
                 if it and slots_for(it["dur"]) > 1:
                     s = slots_for(it["dur"])
+                    # A 105-minute feature is given four half-hours and leaves
+                    # a quarter of an hour of them empty. Reels go in after it.
+                    extra = topup(s * SLOT - MINBREAK - it["dur"])
                     out_items.append(it)
-                    out_blocks.append([1, s, part_idx[name]])
+                    out_items += extra
+                    out_blocks.append([1 + len(extra), s, part_idx[name]])
                     remaining -= s
                     continue
                 if it:                      # a 1-slot item came back; put it back
@@ -168,8 +198,10 @@ def main():
         "items": out_items, "blocks": out_blocks,
     })
     data["channels"].sort(key=lambda c: c["num"])
+    # Minified, the way the repo stores it. indent=1 drops a 46k-line reformat
+    # into the diff and hides whatever actually changed.
     with open("channels.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=1)
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
     print(f"CH {NUM} THE NETWORK: {len(out_items)} programmes, "
           f"{len(out_blocks)} blocks, {DAYS}-day cycle", file=sys.stderr)
